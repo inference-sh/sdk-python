@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inferencesh"
+version = "0.1.2"
+description = "inference.sh Python SDK"
+authors = [
+    {name = "Inference Shell Inc.", email = "hello@inference.sh"},
+]
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pydantic>=2.0.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/inference-sh/sdk"
+"Bug Tracker" = "https://github.com/inference-sh/sdk/issues"
+
+[project.scripts]
+infsh = "infsh.__main__:cli"
+
+[tool.pytest]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
+
+[tool.flake8]
+max-line-length = 100
+exclude = [".git", "__pycache__", "build", "dist"]
