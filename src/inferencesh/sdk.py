@@ -11,6 +11,7 @@ class BaseAppOutput(BaseModel):
 
 class BaseApp(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
+    extra = "allow"
     async def setup(self):
         pass
 
