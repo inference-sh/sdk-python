@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, ClassVar
 from pydantic import BaseModel, ConfigDict
 import mimetypes
 import os
@@ -10,7 +10,11 @@ class BaseAppOutput(BaseModel):
     pass
 
 class BaseApp(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra='allow')
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra='allow'
+    )
+
     async def setup(self):
         pass
 
