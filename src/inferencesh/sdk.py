@@ -48,30 +48,44 @@ class File(BaseModel):
         """Check if the path is a URL."""
         parsed = urllib.parse.urlparse(path)
         return parsed.scheme in ('http', 'https')
-    
     def _download_url(self) -> None:
         """Download the URL to a temporary file and update the path."""
         original_url = self.path
-        # Create a temporary file with a suffix based on the URL path
-        suffix = os.path.splitext(urllib.parse.urlparse(original_url).path)[1]
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        self._tmp_path = tmp_file.name
-        
-        # Set up request with user agent
-        headers = {
-            'User-Agent': (
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/91.0.4472.124 Safari/537.36'
-            )
-        }
-        req = urllib.request.Request(original_url, headers=headers)
-        
-        # Download the file
-        print(f"Downloading URL: {original_url} to {self._tmp_path}")
-        with urllib.request.urlopen(req) as response, open(self._tmp_path, 'wb') as out_file:
-            out_file.write(response.read())
-        self.path = self._tmp_path
+        tmp_file = None
+        try:
+            # Create a temporary file with a suffix based on the URL path
+            suffix = os.path.splitext(urllib.parse.urlparse(original_url).path)[1]
+            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            self._tmp_path = tmp_file.name
+            
+            # Set up request with user agent
+            headers = {
+                'User-Agent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/91.0.4472.124 Safari/537.36'
+                )
+            }
+            req = urllib.request.Request(original_url, headers=headers)
+            
+            # Download the file
+            print(f"Downloading URL: {original_url} to {self._tmp_path}")
+            try:
+                with urllib.request.urlopen(req) as response, open(self._tmp_path, 'wb') as out_file:
+                    out_file.write(response.read())
+                self.path = self._tmp_path
+            except (urllib.error.URLError, urllib.error.HTTPError) as e:
+                raise RuntimeError(f"Failed to download URL {original_url}: {str(e)}")
+            except IOError as e:
+                raise RuntimeError(f"Failed to write downloaded file to {self._tmp_path}: {str(e)}")
+        except Exception as e:
+            # Clean up temp file if something went wrong
+            if tmp_file is not None and hasattr(self, '_tmp_path'):
+                try:
+                    os.unlink(self._tmp_path)
+                except:
+                    pass
+            raise RuntimeError(f"Error downloading URL {original_url}: {str(e)}")
 
     def __del__(self):
         """Cleanup temporary file if it exists."""
