@@ -39,7 +39,6 @@ class File(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         if self._is_url(self.path):
-            print(f"Downloading URL: {self.path}")
             self._download_url()
         elif not os.path.isabs(self.path):
             self.path = os.path.abspath(self.path)
@@ -60,7 +59,11 @@ class File(BaseModel):
         
         # Set up request with user agent
         headers = {
-            'User-Agent': 'inference.sh'
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/91.0.4472.124 Safari/537.36'
+            )
         }
         req = urllib.request.Request(original_url, headers=headers)
         
