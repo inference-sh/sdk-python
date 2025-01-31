@@ -2,6 +2,9 @@ from typing import Optional, Union, ClassVar
 from pydantic import BaseModel, ConfigDict
 import mimetypes
 import os
+import urllib.request
+import urllib.parse
+import tempfile
 
 class BaseAppInput(BaseModel):
     pass
@@ -27,17 +30,45 @@ class BaseApp(BaseModel):
 
 class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
-    path: str  # Absolute path to the file
+    path: str  # Absolute path to the file or URL
     mime_type: Optional[str] = None  # MIME type of the file
     size: Optional[int] = None  # File size in bytes
     filename: Optional[str] = None  # Original filename if available
+    _tmp_path: Optional[str] = None  # Internal storage for temporary file path
     
     def __init__(self, **data):
         super().__init__(**data)
-        if not os.path.isabs(self.path):
+        if self._is_url(self.path):
+            self._download_url()
+        elif not os.path.isabs(self.path):
             self.path = os.path.abspath(self.path)
         self._populate_metadata()
     
+    def _is_url(self, path: str) -> bool:
+        """Check if the path is a URL."""
+        parsed = urllib.parse.urlparse(path)
+        return parsed.scheme in ('http', 'https')
+    
+    def _download_url(self) -> None:
+        """Download the URL to a temporary file and update the path."""
+        original_url = self.path
+        # Create a temporary file with a suffix based on the URL path
+        suffix = os.path.splitext(urllib.parse.urlparse(original_url).path)[1]
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        self._tmp_path = tmp_file.name
+        
+        # Download the file
+        urllib.request.urlretrieve(original_url, self._tmp_path)
+        self.path = self._tmp_path
+
+    def __del__(self):
+        """Cleanup temporary file if it exists."""
+        if hasattr(self, '_tmp_path') and self._tmp_path:
+            try:
+                os.unlink(self._tmp_path)
+            except:
+                pass
+
     def _populate_metadata(self) -> None:
         """Populate file metadata from the path if it exists."""
         if os.path.exists(self.path):
