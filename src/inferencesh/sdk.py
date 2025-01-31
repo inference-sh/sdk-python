@@ -39,6 +39,7 @@ class File(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         if self._is_url(self.path):
+            print(f"Downloading URL: {self.path}")
             self._download_url()
         elif not os.path.isabs(self.path):
             self.path = os.path.abspath(self.path)
@@ -58,6 +59,7 @@ class File(BaseModel):
         self._tmp_path = tmp_file.name
         
         # Download the file
+        print(f"Downloading URL: {original_url} to {self._tmp_path}")
         urllib.request.urlretrieve(original_url, self._tmp_path)
         self.path = self._tmp_path
 
