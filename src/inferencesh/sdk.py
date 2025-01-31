@@ -58,9 +58,16 @@ class File(BaseModel):
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         self._tmp_path = tmp_file.name
         
+        # Set up request with user agent
+        headers = {
+            'User-Agent': 'inference.sh'
+        }
+        req = urllib.request.Request(original_url, headers=headers)
+        
         # Download the file
         print(f"Downloading URL: {original_url} to {self._tmp_path}")
-        urllib.request.urlretrieve(original_url, self._tmp_path)
+        with urllib.request.urlopen(req) as response, open(self._tmp_path, 'wb') as out_file:
+            out_file.write(response.read())
         self.path = self._tmp_path
 
     def __del__(self):
