@@ -101,27 +101,31 @@ class BaseApp(BaseModel):
 
 class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
-    path: str  # Absolute path to the file or URL
+    uri: str  # Original location (URL or file path)
+    path: Optional[str] = None  # Resolved local file path
     mime_type: Optional[str] = None  # MIME type of the file
     size: Optional[int] = None  # File size in bytes
     filename: Optional[str] = None  # Original filename if available
-    _tmp_path: Optional[str] = None  # Internal storage for temporary file path
+    _tmp_path: Optional[str] = PrivateAttr(default=None)  # Internal storage for temporary file path
     
     def __init__(self, **data):
         super().__init__(**data)
-        if self._is_url(self.path):
+        if self._is_url(self.uri):
             self._download_url()
-        elif not os.path.isabs(self.path):
-            self.path = os.path.abspath(self.path)
+        elif not os.path.isabs(self.uri):
+            self.path = os.path.abspath(self.uri)
+        else:
+            self.path = self.uri
         self._populate_metadata()
     
     def _is_url(self, path: str) -> bool:
         """Check if the path is a URL."""
         parsed = urllib.parse.urlparse(path)
         return parsed.scheme in ('http', 'https')
+
     def _download_url(self) -> None:
         """Download the URL to a temporary file and update the path."""
-        original_url = self.path
+        original_url = self.uri
         tmp_file = None
         try:
             # Create a temporary file with a suffix based on the URL path
@@ -179,7 +183,7 @@ class File(BaseModel):
     @classmethod
     def from_path(cls, path: Union[str, os.PathLike]) -> 'File':
         """Create a File instance from a file path."""
-        return cls(path=str(path))
+        return cls(uri=str(path))
     
     def _guess_mime_type(self) -> Optional[str]:
         """Guess the MIME type of the file."""
