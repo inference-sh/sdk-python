@@ -101,7 +101,7 @@ class BaseApp(BaseModel):
 
 class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
-    uri: str  # Original location (URL or file path)
+    uri: Optional[str] = None  # Original location (URL or file path)
     path: Optional[str] = None  # Resolved local file path
     content_type: Optional[str] = None  # MIME type of the file
     size: Optional[int] = None  # File size in bytes
@@ -113,12 +113,19 @@ class File(BaseModel):
         populate_by_name=True
     )
 
+    @model_validator(mode='after')
+    def check_uri_or_path(self) -> 'File':
+        """Validate that either uri or path is provided."""
+        if not self.uri and not self.path:
+            raise ValueError("Either 'uri' or 'path' must be provided")
+        return self
+
     def model_post_init(self, _: Any) -> None:
-        if self._is_url(self.uri):
+        if self.uri and self._is_url(self.uri):
             self._download_url()
-        elif not os.path.isabs(self.uri):
+        elif self.uri and not os.path.isabs(self.uri):
             self.path = os.path.abspath(self.uri)
-        else:
+        elif self.uri:
             self.path = self.uri
         self._populate_metadata()
     
