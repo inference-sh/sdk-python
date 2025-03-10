@@ -1,5 +1,5 @@
 from typing import Optional, Union, ClassVar
-from pydantic import BaseModel, ConfigDict, PrivateAttr
+from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 import mimetypes
 import os
 import urllib.request
