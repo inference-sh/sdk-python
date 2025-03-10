@@ -36,9 +36,12 @@ git add pyproject.toml
 # Commit version bump
 git commit -m "chore: bump version to ${NEW_VERSION}"
 
-# Create and push tag
-git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
-git push origin main --tags
+# Push commit
+git push origin main
+
+# Create and push only the new tag
+git tag "v${NEW_VERSION}"
+git push origin "v${NEW_VERSION}"
 
 # Create GitHub release
 echo "Creating GitHub release..."
