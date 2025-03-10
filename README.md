@@ -21,7 +21,7 @@ file = File(path="/path/to/file.png")
 # File with explicit metadata
 file = File(
     path="/path/to/file.png",
-    mime_type="image/png",
+    content_type="image/png",
     filename="custom_name.png",
     size=1024  # in bytes
 )
@@ -33,7 +33,7 @@ file = File.from_path("/path/to/file.png")
 exists = file.exists()
 
 # Access file metadata
-print(file.mime_type)  # automatically detected if not specified
+print(file.content_type)  # automatically detected if not specified
 print(file.size)       # file size in bytes
 print(file.filename)   # basename of the file
 

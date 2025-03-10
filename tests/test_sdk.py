@@ -10,7 +10,7 @@ def test_file_creation():
     file = File(path="test.txt")
     assert file.exists()
     assert file.size > 0
-    assert file.mime_type is not None
+    assert file.content_type is not None
     assert file.filename == "test.txt"
     
     os.remove("test.txt")

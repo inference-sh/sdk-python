@@ -103,7 +103,7 @@ class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
     uri: str  # Original location (URL or file path)
     path: Optional[str] = None  # Resolved local file path
-    mime_type: Optional[str] = None  # MIME type of the file
+    content_type: Optional[str] = None  # MIME type of the file
     size: Optional[int] = None  # File size in bytes
     filename: Optional[str] = None  # Original filename if available
     _tmp_path: Optional[str] = PrivateAttr(default=None)  # Internal storage for temporary file path
@@ -177,8 +177,8 @@ class File(BaseModel):
     def _populate_metadata(self) -> None:
         """Populate file metadata from the path if it exists."""
         if os.path.exists(self.path):
-            if not self.mime_type:
-                self.mime_type = self._guess_mime_type()
+            if not self.content_type:
+                self.content_type = self._guess_content_type()
             if not self.size:
                 self.size = self._get_file_size()
             if not self.filename:
@@ -189,7 +189,7 @@ class File(BaseModel):
         """Create a File instance from a file path."""
         return cls(uri=str(path))
     
-    def _guess_mime_type(self) -> Optional[str]:
+    def _guess_content_type(self) -> Optional[str]:
         """Guess the MIME type of the file."""
         return mimetypes.guess_type(self.path)[0]
     
