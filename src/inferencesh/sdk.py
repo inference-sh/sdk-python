@@ -108,8 +108,12 @@ class File(BaseModel):
     filename: Optional[str] = None  # Original filename if available
     _tmp_path: Optional[str] = PrivateAttr(default=None)  # Internal storage for temporary file path
     
-    def __init__(self, **data):
-        super().__init__(**data)
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        populate_by_name=True
+    )
+
+    def model_post_init(self, _: Any) -> None:
         if self._is_url(self.uri):
             self._download_url()
         elif not os.path.isabs(self.uri):
@@ -203,8 +207,4 @@ class File(BaseModel):
     
     def refresh_metadata(self) -> None:
         """Refresh all metadata from the file."""
-        self._populate_metadata()
-    
-    class Config:
-        """Pydantic config"""
-        arbitrary_types_allowed = True 
+        self._populate_metadata() 
