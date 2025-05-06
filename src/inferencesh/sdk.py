@@ -1,4 +1,4 @@
-from typing import Optional, Union, ClassVar
+from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 import mimetypes
 import os
@@ -114,6 +114,25 @@ class File(BaseModel):
         populate_by_name=True
     )
 
+    @classmethod
+    def __get_validators__(cls):
+        # First yield the default validators
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, value):
+        """Convert string values to File objects."""
+        if isinstance(value, str):
+            # If it's a string, treat it as a uri
+            return cls(uri=value)
+        elif isinstance(value, cls):
+            # If it's already a File instance, return it as is
+            return value
+        elif isinstance(value, dict):
+            # If it's a dict, use normal validation
+            return cls(**value)
+        raise ValueError(f'Invalid input for File: {value}')
+
     @model_validator(mode='after')
     def check_uri_or_path(self) -> 'File':
         """Validate that either uri or path is provided."""
@@ -170,7 +189,7 @@ class File(BaseModel):
             if tmp_file is not None and hasattr(self, '_tmp_path'):
                 try:
                     os.unlink(self._tmp_path)
-                except:
+                except (OSError, IOError):
                     pass
             raise RuntimeError(f"Error downloading URL {original_url}: {str(e)}")
 
@@ -179,7 +198,7 @@ class File(BaseModel):
         if hasattr(self, '_tmp_path') and self._tmp_path:
             try:
                 os.unlink(self._tmp_path)
-            except:
+            except (OSError, IOError):
                 pass
 
     def _populate_metadata(self) -> None:
