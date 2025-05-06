@@ -15,6 +15,7 @@ from enum import Enum
 import shutil
 from pathlib import Path
 import hashlib
+from tqdm import tqdm
 
 
 # inspired by https://github.com/pydantic/pydantic/issues/7580
@@ -125,7 +126,6 @@ class File(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def convert_str_to_file(cls, values):
-        print(f"check_uri_or_path input: {values}")
         if isinstance(values, str):  # Only accept strings
             return {"uri": values}
         elif isinstance(values, dict):
@@ -176,11 +176,22 @@ class File(BaseModel):
             }
             req = urllib.request.Request(original_url, headers=headers)
             
-            # Download the file
+            # Download the file with progress bar
             print(f"Downloading URL: {original_url} to {self._tmp_path}")
             try:
-                with urllib.request.urlopen(req) as response, open(self._tmp_path, 'wb') as out_file:
-                    out_file.write(response.read())
+                with urllib.request.urlopen(req) as response:
+                    total_size = int(response.headers.get('content-length', 0))
+                    block_size = 1024  # 1 Kibibyte
+                    
+                    with tqdm(total=total_size, unit='iB', unit_scale=True) as pbar:
+                        with open(self._tmp_path, 'wb') as out_file:
+                            while True:
+                                buffer = response.read(block_size)
+                                if not buffer:
+                                    break
+                                out_file.write(buffer)
+                                pbar.update(len(buffer))
+                            
                 self.path = self._tmp_path
             except (urllib.error.URLError, urllib.error.HTTPError) as e:
                 raise RuntimeError(f"Failed to download URL {original_url}: {str(e)}")
