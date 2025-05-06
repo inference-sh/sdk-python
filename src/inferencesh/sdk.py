@@ -1,17 +1,20 @@
 from typing import Optional, Union
-from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator, Field, field_validator
 import mimetypes
 import os
 import urllib.request
 import urllib.parse
 import tempfile
-from pydantic import Field
 from typing import Any, Dict, List
 
 import inspect
 import ast
 import textwrap
 from collections import OrderedDict
+from enum import Enum
+import shutil
+from pathlib import Path
+import hashlib
 
 
 # inspired by https://github.com/pydantic/pydantic/issues/7580
@@ -102,39 +105,35 @@ class BaseApp(BaseModel):
 
 class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
-    uri: Optional[str] = None  # Original location (URL or file path)
+    uri: Optional[str] = Field(default=None)  # Original location (URL or file path)
     path: Optional[str] = None  # Resolved local file path
     content_type: Optional[str] = None  # MIME type of the file
     size: Optional[int] = None  # File size in bytes
     filename: Optional[str] = None  # Original filename if available
     _tmp_path: Optional[str] = PrivateAttr(default=None)  # Internal storage for temporary file path
     
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-        populate_by_name=True
-    )
+    def __init__(self, initializer=None, **data):
+        if initializer is not None:
+            if isinstance(initializer, str):
+                data['uri'] = initializer
+            elif isinstance(initializer, File):
+                data = initializer.model_dump()
+            else:
+                raise ValueError(f'Invalid input for File: {initializer}')
+        super().__init__(**data)
 
+    @model_validator(mode='before')
     @classmethod
-    def __get_validators__(cls):
-        # First yield the default validators
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, value):
-        """Convert string values to File objects."""
-        if isinstance(value, str):
-            # If it's a string, treat it as a uri
-            return cls(uri=value)
-        elif isinstance(value, cls):
-            # If it's already a File instance, return it as is
-            return value
-        elif isinstance(value, dict):
-            # If it's a dict, use normal validation
-            return cls(**value)
-        raise ValueError(f'Invalid input for File: {value}')
-
+    def convert_str_to_file(cls, values):
+        print(f"check_uri_or_path input: {values}")
+        if isinstance(values, str):  # Only accept strings
+            return {"uri": values}
+        elif isinstance(values, dict):
+            return values
+        raise ValueError(f'Invalid input for File: {values}')
+    
     @model_validator(mode='after')
-    def check_uri_or_path(self) -> 'File':
+    def validate_required_fields(self) -> 'File':
         """Validate that either uri or path is provided."""
         if not self.uri and not self.path:
             raise ValueError("Either 'uri' or 'path' must be provided")
@@ -147,7 +146,10 @@ class File(BaseModel):
             self.path = os.path.abspath(self.uri)
         elif self.uri:
             self.path = self.uri
-        self._populate_metadata()
+        if self.path:
+            self._populate_metadata()
+        else:
+            raise ValueError("Either 'uri' or 'path' must be provided")
     
     def _is_url(self, path: str) -> bool:
         """Check if the path is a URL."""
@@ -234,13 +236,24 @@ class File(BaseModel):
     
     def refresh_metadata(self) -> None:
         """Refresh all metadata from the file."""
-        self._populate_metadata() 
+        if os.path.exists(self.path):
+            self.content_type = self._guess_content_type()
+            self.size = self._get_file_size()  # Always update size
+            self.filename = self._get_filename()
 
+
+class ContextMessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant" 
+    SYSTEM = "system"
+
+class Message(BaseModel):
+    role: ContextMessageRole
+    content: str
 
 class ContextMessage(BaseModel):
-    role: str = Field(
+    role: ContextMessageRole = Field(
         description="The role of the message",
-        enum=["user", "assistant", "system"]
     )
     text: str = Field(
         description="The text content of the message"
@@ -301,3 +314,50 @@ class LLMInputWithImage(LLMInput):
         description="The image to use for the model",
         default=None
     )
+
+class DownloadDir(str, Enum):
+    """Standard download directories used by the SDK."""
+    DATA = "./data"   # Persistent storage/cache directory
+    TEMP = "./tmp"    # Temporary storage directory
+    CACHE = "./cache" # Cache directory
+
+def download(url: str, directory: Union[str, Path, DownloadDir]) -> str:
+    """Download a file to the specified directory and return its path.
+    
+    Args:
+        url: The URL to download from
+        directory: The directory to save the file to. Can be a string path, 
+                  Path object, or DownloadDir enum value.
+        
+    Returns:
+        str: The path to the downloaded file
+    """
+    # Convert directory to Path
+    dir_path = Path(directory)
+    dir_path.mkdir(exist_ok=True)
+    
+    # Create hash directory from URL
+    url_hash = hashlib.sha256(url.encode()).hexdigest()[:12]
+    hash_dir = dir_path / url_hash
+    hash_dir.mkdir(exist_ok=True)
+    
+    # Keep original filename
+    filename = os.path.basename(urllib.parse.urlparse(url).path)
+    if not filename:
+        filename = 'download'
+        
+    output_path = hash_dir / filename
+    
+    # If file exists in directory and it's not a temp directory, return it
+    if output_path.exists() and directory != DownloadDir.TEMP:
+        return str(output_path)
+    
+    # Download the file
+    file = File(url)
+    if file.path:
+        shutil.copy2(file.path, output_path)
+        # Prevent the File instance from deleting its temporary file
+        file._tmp_path = None
+        return str(output_path)
+    
+    raise RuntimeError(f"Failed to download {url}")
