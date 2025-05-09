@@ -140,17 +140,29 @@ class File(BaseModel):
         return self
 
     def model_post_init(self, _: Any) -> None:
-        if self.uri and self._is_url(self.uri):
-            self._download_url()
-        elif self.uri and not os.path.isabs(self.uri):
-            self.path = os.path.abspath(self.uri)
-        elif self.uri:
-            self.path = self.uri
+        """Initialize file path and metadata after model creation.
+        
+        This method handles:
+        1. Downloading URLs to local files if uri is a URL
+        2. Converting relative paths to absolute paths
+        3. Populating file metadata
+        """
+        # Handle uri if provided
+        if self.uri:
+            if self._is_url(self.uri):
+                self._download_url()
+            else:
+                # Convert relative paths to absolute, leave absolute paths unchanged
+                self.path = os.path.abspath(self.uri)
+        
+        # Handle path if provided
         if self.path:
+            # Convert relative paths to absolute, leave absolute paths unchanged
+            self.path = os.path.abspath(self.path)
             self._populate_metadata()
-        else:
-            raise ValueError("Either 'uri' or 'path' must be provided")
-    
+            return
+            
+        raise ValueError("Either 'uri' or 'path' must be provided and be valid")
     def _is_url(self, path: str) -> bool:
         """Check if the path is a URL."""
         parsed = urllib.parse.urlparse(path)
@@ -326,19 +338,26 @@ class LLMInputWithImage(LLMInput):
         default=None
     )
 
-class DownloadDir(str, Enum):
-    """Standard download directories used by the SDK."""
-    DATA = "./data"   # Persistent storage/cache directory
-    TEMP = "./tmp"    # Temporary storage directory
-    CACHE = "./cache" # Cache directory
+class StorageDir(str, Enum):
+    """Standard storage directories used by the SDK."""
+    DATA = "/app/data"   # Persistent storage/cache directory
+    TEMP = "/app/tmp"    # Temporary storage directory
+    CACHE = "/app/cache" # Cache directory
 
-def download(url: str, directory: Union[str, Path, DownloadDir]) -> str:
+    @property
+    def path(self) -> Path:
+        """Get the Path object for this storage directory, ensuring it exists."""
+        path = Path(self.value)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+def download(url: str, directory: Union[str, Path, StorageDir]) -> str:
     """Download a file to the specified directory and return its path.
     
     Args:
         url: The URL to download from
         directory: The directory to save the file to. Can be a string path, 
-                  Path object, or DownloadDir enum value.
+                  Path object, or StorageDir enum value.
         
     Returns:
         str: The path to the downloaded file
@@ -360,7 +379,7 @@ def download(url: str, directory: Union[str, Path, DownloadDir]) -> str:
     output_path = hash_dir / filename
     
     # If file exists in directory and it's not a temp directory, return it
-    if output_path.exists() and directory != DownloadDir.TEMP:
+    if output_path.exists() and directory != StorageDir.TEMP:
         return str(output_path)
     
     # Download the file
