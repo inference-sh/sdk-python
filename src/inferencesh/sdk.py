@@ -345,6 +345,16 @@ class LLMInput(BaseAppInput):
     )
 
 class LLMInputWithImage(LLMInput):
+    context: list[ContextMessageWithImage] = Field(
+        description="The context to use for the model",
+        examples=[
+            [
+                {"role": "user", "content": [{"type": "text", "text": "What is the capital of France?"}, {"type": "image", "url": "https://example.com/image.jpg"}]}, 
+                {"role": "assistant", "content": [{"type": "text", "text": "The capital of France is Paris."}]}
+            ],
+        ],
+        default=[]
+    )
     image: Optional[File] = Field(
         description="The image to use for the model",
         default=None
