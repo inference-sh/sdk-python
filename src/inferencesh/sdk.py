@@ -264,6 +264,18 @@ class File(BaseModel):
             self.size = self._get_file_size()  # Always update size
             self.filename = self._get_filename()
 
+    @classmethod
+    def model_json_schema(cls, **kwargs):
+        schema = super().model_json_schema(**kwargs)
+        
+        # Create a schema that accepts either a string or the full object
+        return {
+            "oneOf": [
+                {"type": "string"},  # Accept string input
+                schema  # Accept full object input
+            ]
+        }
+
 
 class ContextMessageRole(str, Enum):
     USER = "user"
