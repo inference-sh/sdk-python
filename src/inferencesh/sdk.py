@@ -267,7 +267,7 @@ class File(BaseModel):
     @classmethod
     def model_json_schema(cls, **kwargs):
         schema = super().model_json_schema(**kwargs)
-        
+        schema["$id"] = "/schemas/File"
         # Create a schema that accepts either a string or the full object
         return {
             "oneOf": [
