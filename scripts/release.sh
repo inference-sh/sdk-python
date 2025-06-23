@@ -16,9 +16,18 @@ fi
 
 # Get the latest tag
 LATEST_TAG=$(git describe --tags --abbrev=0)
+VERSION=${LATEST_TAG#v}
+
+# Update version in pyproject.toml
+sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+
+# Commit the pyproject.toml change
+git add pyproject.toml
+git commit -m "chore: sync pyproject.toml version with tag ${LATEST_TAG}"
+git push origin main
 
 # Create GitHub release
-echo "Creating GitHub release for ${LATEST_TAG}..."
+echo "Creating GitHub release..."
 gh release create "${LATEST_TAG}" \
     --title "Release ${LATEST_TAG}" \
     --generate-notes
