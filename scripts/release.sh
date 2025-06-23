@@ -16,19 +16,16 @@ fi
 
 # Get the latest tag
 LATEST_TAG=$(git describe --tags --abbrev=0)
+
+# Verify versions match
 VERSION=${LATEST_TAG#v}
-
-# Update version in pyproject.toml
-sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
-
-# Commit the pyproject.toml change
-git add pyproject.toml
-git commit -m "chore: sync pyproject.toml version with tag ${LATEST_TAG}"
-git push origin main
-
-# Wait a few seconds for GitHub to process the push
-echo "Waiting for GitHub to process the version update..."
-sleep 5
+PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | cut -d'"' -f2)
+if [ "$VERSION" != "$PYPROJECT_VERSION" ]; then
+    echo "Error: Version mismatch!"
+    echo "Git tag: $VERSION"
+    echo "pyproject.toml: $PYPROJECT_VERSION"
+    exit 1
+fi
 
 # Create GitHub release
 echo "Creating GitHub release..."

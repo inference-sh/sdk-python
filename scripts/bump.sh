@@ -14,8 +14,15 @@ case "$1" in
   *) echo "Usage: $0 {major|minor|patch}"; exit 1 ;;
 esac
 
-new_tag="v$major.$minor.$patch"
-git commit --allow-empty -m "chore: bump version to $new_tag"
+new_version="$major.$minor.$patch"
+new_tag="v$new_version"
+
+# Update version in pyproject.toml
+sed -i "s/^version = \".*\"/version = \"${new_version}\"/" pyproject.toml
+
+# Commit both version bump and pyproject.toml change
+git add pyproject.toml
+git commit -m "chore: bump version to $new_tag"
 git tag "$new_tag"
 git push origin HEAD "$new_tag"
 echo "Bumped to $new_tag" 
