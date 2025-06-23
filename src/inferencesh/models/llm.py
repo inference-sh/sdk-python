@@ -139,13 +139,13 @@ def timing_context():
 
 def build_messages(
     input_data: LLMInput,
-    message_modifier: Optional[Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]] = None
+    transform_user_message: Optional[Callable[[str], str]] = None
 ) -> List[Dict[str, Any]]:
     """Build messages for LLaMA.cpp chat completion.
     
     Args:
         input_data: The input data
-        message_modifier: Optional function to modify messages before returning (e.g. add /think)
+        transform_user_message: Optional function to transform user message text before building messages
     """
     messages = [
         {
@@ -157,8 +157,11 @@ def build_messages(
     # Add context messages
     for msg in input_data.context:
         message_content = []
-        if msg.text:
-            message_content.append({"type": "text", "text": msg.text})
+        text = msg.text
+        if transform_user_message and msg.role == ContextMessageRole.USER:
+            text = transform_user_message(text)
+        if text:
+            message_content.append({"type": "text", "text": text})
         if hasattr(msg, 'image') and msg.image:
             if msg.image.path:
                 message_content.append({"type": "image_url", "image_url": {"url": msg.image.path}})
@@ -171,17 +174,17 @@ def build_messages(
 
     # Add user message
     user_content = []
-    if input_data.text:
-        user_content.append({"type": "text", "text": input_data.text})
+    text = input_data.text
+    if transform_user_message:
+        text = transform_user_message(text)
+    if text:
+        user_content.append({"type": "text", "text": text})
     if hasattr(input_data, 'image') and input_data.image:
         if input_data.image.path:
             user_content.append({"type": "image_url", "image_url": {"url": input_data.image.path}})
         elif input_data.image.uri:
             user_content.append({"type": "image_url", "image_url": {"url": input_data.image.uri}})
     messages.append({"role": "user", "content": user_content})
-
-    if message_modifier:
-        messages = message_modifier(messages)
 
     return messages
 
@@ -195,8 +198,21 @@ def stream_generate(
     max_tokens: int = 4096,
     stop: Optional[List[str]] = None,
     handle_thinking: bool = False,
+    transform_response: Optional[Callable[[str, str], tuple[str, LLMOutput]]] = None,
 ) -> Generator[LLMOutput, None, None]:
-    """Stream generate from LLaMA.cpp model with timing and usage tracking."""
+    """Stream generate from LLaMA.cpp model with timing and usage tracking.
+    
+    Args:
+        model: The LLaMA.cpp model instance
+        messages: List of messages to send to the model
+        output_cls: Output class type to use for responses
+        temperature: Sampling temperature
+        top_p: Top-p sampling threshold
+        max_tokens: Maximum tokens to generate
+        stop: Optional list of stop sequences
+        handle_thinking: Whether to handle thinking tags
+        transform_response: Optional function to transform responses, takes (piece, buffer) and returns (new_buffer, output)
+    """
     response_queue: Queue[Optional[tuple[str, dict]]] = Queue()
     thread_exception = None
     usage_stats = {
@@ -279,32 +295,57 @@ def stream_generate(
                             completion_tokens=usage_stats["completion_tokens"],
                             total_tokens=usage_stats["total_tokens"]
                         )
-                        yield output_cls(
-                            response=buffer.strip(),
-                            thinking_content=thinking_content.strip() if thinking_content else None,
-                            usage=usage
-                        )
+                        
+                        if transform_response:
+                            buffer, output = transform_response(piece or "", buffer)
+                            output.usage = usage
+                            yield output
+                        else:
+                            # Handle thinking vs response content if enabled
+                            if handle_thinking and "</think>" in piece:
+                                parts = piece.split("</think>")
+                                if in_thinking:
+                                    thinking_content += parts[0].replace("<think>", "")
+                                    buffer = parts[1] if len(parts) > 1 else ""
+                                    in_thinking = False
+                                else:
+                                    buffer += piece
+                            else:
+                                if in_thinking:
+                                    thinking_content += piece.replace("<think>", "")
+                                else:
+                                    buffer += piece
+                                    
+                            yield output_cls(
+                                response=buffer.strip(),
+                                thinking_content=thinking_content.strip() if thinking_content else None,
+                                usage=usage
+                            )
                         break
 
-                    # Handle thinking vs response content if enabled
-                    if handle_thinking and "</think>" in piece:
-                        parts = piece.split("</think>")
-                        if in_thinking:
-                            thinking_content += parts[0].replace("<think>", "")
-                            buffer = parts[1] if len(parts) > 1 else ""
-                            in_thinking = False
-                        else:
-                            buffer += piece
+                    if transform_response:
+                        buffer, output = transform_response(piece, buffer)
+                        yield output
                     else:
-                        if in_thinking:
-                            thinking_content += piece.replace("<think>", "")
+                        # Handle thinking vs response content if enabled
+                        if handle_thinking and "</think>" in piece:
+                            parts = piece.split("</think>")
+                            if in_thinking:
+                                thinking_content += parts[0].replace("<think>", "")
+                                buffer = parts[1] if len(parts) > 1 else ""
+                                in_thinking = False
+                            else:
+                                buffer += piece
                         else:
-                            buffer += piece
+                            if in_thinking:
+                                thinking_content += piece.replace("<think>", "")
+                            else:
+                                buffer += piece
 
-                    yield output_cls(
-                        response=buffer.strip(),
-                        thinking_content=thinking_content.strip() if thinking_content else None
-                    )
+                        yield output_cls(
+                            response=buffer.strip(),
+                            thinking_content=thinking_content.strip() if thinking_content else None
+                        )
                     
                 except Exception as e:
                     if thread_exception and isinstance(e, thread_exception.__class__):
