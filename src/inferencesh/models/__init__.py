@@ -6,9 +6,11 @@ from .llm import (
     ContextMessageRole,
     Message,
     ContextMessage,
-    ContextMessageWithImage,
     LLMInput,
-    LLMInputWithImage,
+    LLMOutput,
+    build_messages,
+    stream_generate,
+    timing_context,
 )
 
 __all__ = [
@@ -19,7 +21,9 @@ __all__ = [
     "ContextMessageRole",
     "Message",
     "ContextMessage",
-    "ContextMessageWithImage",
     "LLMInput",
-    "LLMInputWithImage",
+    "LLMOutput",
+    "build_messages",
+    "stream_generate",
+    "timing_context",
 ] 
