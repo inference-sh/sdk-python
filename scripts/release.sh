@@ -26,6 +26,10 @@ git add pyproject.toml
 git commit -m "chore: sync pyproject.toml version with tag ${LATEST_TAG}"
 git push origin main
 
+# Wait a few seconds for GitHub to process the push
+echo "Waiting for GitHub to process the version update..."
+sleep 5
+
 # Create GitHub release
 echo "Creating GitHub release..."
 gh release create "${LATEST_TAG}" \
@@ -33,3 +37,4 @@ gh release create "${LATEST_TAG}" \
     --generate-notes
 
 echo "Released ${LATEST_TAG} successfully!"
+echo "The PyPI package will be published automatically by the GitHub workflow."
