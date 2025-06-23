@@ -1,12 +1,8 @@
-"""inference.sh Python SDK package."""
+"""Models package for inference.sh SDK."""
 
-__version__ = "0.1.2"
-
-from .models import (
-    BaseApp,
-    BaseAppInput,
-    BaseAppOutput,
-    File,
+from .base import BaseApp, BaseAppInput, BaseAppOutput
+from .file import File
+from .llm import (
     ContextMessageRole,
     Message,
     ContextMessage,
@@ -14,7 +10,6 @@ from .models import (
     LLMInput,
     LLMInputWithImage,
 )
-from .utils import StorageDir, download
 
 __all__ = [
     "BaseApp",
@@ -27,6 +22,4 @@ __all__ = [
     "ContextMessageWithImage",
     "LLMInput",
     "LLMInputWithImage",
-    "StorageDir",
-    "download",
-]
+] 
