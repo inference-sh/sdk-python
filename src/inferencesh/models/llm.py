@@ -5,6 +5,7 @@ from queue import Queue
 from threading import Thread
 import time
 from contextlib import contextmanager
+import base64
 
 from .base import BaseAppInput, BaseAppOutput
 from .file import File
@@ -136,6 +137,10 @@ def timing_context():
     finally:
         pass
 
+def image_to_base64_data_uri(file_path):
+    with open(file_path, "rb") as img_file:
+        base64_data = base64.b64encode(img_file.read()).decode('utf-8')
+        return f"data:image/png;base64,{base64_data}"
 
 def build_messages(
     input_data: LLMInput,
@@ -164,7 +169,8 @@ def build_messages(
             message_content.append({"type": "text", "text": text})
         if hasattr(msg, 'image') and msg.image:
             if msg.image.path:
-                message_content.append({"type": "image_url", "image_url": {"url": msg.image.path}})
+                image_data_uri = image_to_base64_data_uri(msg.image.path)
+                message_content.append({"type": "image_url", "image_url": {"url": image_data_uri}})
             elif msg.image.uri:
                 message_content.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
         messages.append({
@@ -181,7 +187,8 @@ def build_messages(
         user_content.append({"type": "text", "text": text})
     if hasattr(input_data, 'image') and input_data.image:
         if input_data.image.path:
-            user_content.append({"type": "image_url", "image_url": {"url": input_data.image.path}})
+            image_data_uri = image_to_base64_data_uri(input_data.image.path)
+            user_content.append({"type": "image_url", "image_url": {"url": image_data_uri}})
         elif input_data.image.uri:
             user_content.append({"type": "image_url", "image_url": {"url": input_data.image.uri}})
     messages.append({"role": "user", "content": user_content})
