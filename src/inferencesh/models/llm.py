@@ -213,7 +213,7 @@ class StreamResponse:
     """Holds a single chunk of streamed response."""
     def __init__(self):
         self.content = ""
-        self.tool_calls = []
+        self.tool_calls = None  # Changed from [] to None
         self.finish_reason = None
         self.timing_stats = {
             "time_to_first_token": 0.0,
@@ -265,6 +265,9 @@ class StreamResponse:
     
     def _update_tool_calls(self, new_tool_calls: List[Dict[str, Any]]) -> None:
         """Update tool calls, handling both full and partial updates."""
+        if self.tool_calls is None:
+            self.tool_calls = []
+            
         for tool_delta in new_tool_calls:
             tool_id = tool_delta.get("id")
             if not tool_id:
