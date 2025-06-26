@@ -116,7 +116,7 @@ def timing_context():
     class TimingInfo:
         def __init__(self):
             self.start_time = time.time()
-            self.first_token_time = 0
+            self.first_token_time = None
             self.reasoning_start_time = None
             self.total_reasoning_time = 0.0
             self.reasoning_tokens = 0
@@ -140,12 +140,17 @@ def timing_context():
         
         @property
         def stats(self):
-            end_time = time.time()
+            current_time = time.time()
             if self.first_token_time is None:
-                self.first_token_time = end_time
+                return {
+                    "time_to_first_token": 0.0,
+                    "generation_time": 0.0,
+                    "reasoning_time": self.total_reasoning_time,
+                    "reasoning_tokens": self.reasoning_tokens
+                }
             
             time_to_first = self.first_token_time - self.start_time
-            generation_time = end_time - self.first_token_time
+            generation_time = current_time - self.first_token_time
             
             return {
                 "time_to_first_token": time_to_first,
@@ -216,7 +221,7 @@ class StreamResponse:
         self.tool_calls = None  # Changed from [] to None
         self.finish_reason = None
         self.timing_stats = {
-            "time_to_first_token": 0.0,
+            "time_to_first_token": None,  # Changed from 0.0 to None
             "generation_time": 0.0,
             "reasoning_time": 0.0,
             "reasoning_tokens": 0,
@@ -233,7 +238,12 @@ class StreamResponse:
         """Update response state from a chunk."""
         # Update usage stats if present
         if "usage" in chunk and chunk["usage"] is not None:
-            self.usage_stats.update(chunk["usage"])
+            usage = chunk["usage"]
+            self.usage_stats.update({
+                "prompt_tokens": usage.get("prompt_tokens", self.usage_stats["prompt_tokens"]),
+                "completion_tokens": usage.get("completion_tokens", self.usage_stats["completion_tokens"]),
+                "total_tokens": usage.get("total_tokens", self.usage_stats["total_tokens"])
+            })
         
         # Get the delta from the chunk
         delta = chunk.get("choices", [{}])[0]
@@ -245,23 +255,33 @@ class StreamResponse:
             if message.get("tool_calls"):
                 self._update_tool_calls(message["tool_calls"])
             self.finish_reason = delta.get("finish_reason")
+            if self.finish_reason:
+                self.usage_stats["stop_reason"] = self.finish_reason
         elif "delta" in delta:
             delta_content = delta["delta"]
             self.content = delta_content.get("content", "")
             if delta_content.get("tool_calls"):
                 self._update_tool_calls(delta_content["tool_calls"])
             self.finish_reason = delta.get("finish_reason")
+            if self.finish_reason:
+                self.usage_stats["stop_reason"] = self.finish_reason
         
-        # Update timing stats while preserving tokens_per_second
+        # Update timing stats
         timing_stats = timing.stats
-        generation_time = timing_stats["generation_time"]
-        completion_tokens = self.usage_stats.get("completion_tokens", 0)
-        tokens_per_second = (completion_tokens / generation_time) if generation_time > 0 and completion_tokens > 0 else 0.0
+        if self.timing_stats["time_to_first_token"] is None:
+            self.timing_stats["time_to_first_token"] = timing_stats["time_to_first_token"]
         
         self.timing_stats.update({
-            **timing_stats,
-            "tokens_per_second": tokens_per_second
+            "generation_time": timing_stats["generation_time"],
+            "reasoning_time": timing_stats["reasoning_time"],
+            "reasoning_tokens": timing_stats["reasoning_tokens"]
         })
+        
+        # Calculate tokens per second only if we have valid completion tokens and generation time
+        if self.usage_stats["completion_tokens"] > 0 and timing_stats["generation_time"] > 0:
+            self.timing_stats["tokens_per_second"] = (
+                self.usage_stats["completion_tokens"] / timing_stats["generation_time"]
+            )
     
     def _update_tool_calls(self, new_tool_calls: List[Dict[str, Any]]) -> None:
         """Update tool calls, handling both full and partial updates."""
