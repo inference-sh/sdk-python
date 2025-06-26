@@ -416,7 +416,7 @@ def stream_generate(
                     if "message" in delta:
                         message = delta["message"]
                         content = message.get("content", "")
-                        if "tool_calls" in message:
+                        if message.get("tool_calls"):
                             for tool in message["tool_calls"]:
                                 if tool.get("id") not in {t.get("id") for t in tool_calls}:
                                     tool_calls.append(tool)
@@ -426,7 +426,7 @@ def stream_generate(
                         content = delta_content.get("content", "")
                         
                         # Handle streaming tool calls
-                        if "tool_calls" in delta_content:
+                        if delta_content.get("tool_calls"):
                             for tool_delta in delta_content["tool_calls"]:
                                 tool_id = tool_delta.get("id")
                                 
@@ -451,7 +451,13 @@ def stream_generate(
                                         
                         finish_reason = delta.get("finish_reason")
                     
-                    if content or "tool_calls" in (delta.get("message", {}) or delta.get("delta", {})):
+                    has_update = bool(content)
+                    has_tool_update = bool(
+                        (delta.get("message", {}) or {}).get("tool_calls") or
+                        (delta.get("delta", {}) or {}).get("tool_calls")
+                    )
+                    
+                    if has_update or has_tool_update:
                         if not timing.first_token_time:
                             timing.mark_first_token()
                         response_queue.put((content, {}, tool_calls[:] if tool_calls else None))
