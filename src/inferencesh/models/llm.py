@@ -341,6 +341,9 @@ class ResponseTransformer:
         Returns:
             Cleaned text with common and model-specific tokens removed
         """
+        if text is None:
+            return ""
+        
         # Common token cleaning across most models
         cleaned = (text.replace("<|im_end|>", "")
                       .replace("<|im_start|>", "")
@@ -471,6 +474,7 @@ def stream_generate(
     top_p: float = 0.95,
     max_tokens: int = 4096,
     stop: Optional[List[str]] = None,
+    verbose: bool = False,
 ) -> Generator[LLMOutput, None, None]:
     """Stream generate from LLaMA.cpp model with timing and usage tracking."""
     with timing_context() as timing:
@@ -498,6 +502,8 @@ def stream_generate(
             completion = model.create_chat_completion(**completion_kwargs)
             
             for chunk in completion:
+                if verbose:
+                    print(chunk)
                 # Mark first token time as soon as we get any response
                 if not timing.first_token_time:
                     timing.mark_first_token()
