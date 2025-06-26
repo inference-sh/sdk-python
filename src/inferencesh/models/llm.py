@@ -326,18 +326,17 @@ class StreamResponse:
         if self.tool_calls:
             output.tool_calls = self.tool_calls
             
-        # Add usage stats if this is final
-        if self.usage_stats is not None:
-            output.usage = LLMUsage(
-                stop_reason=self.usage_stats["stop_reason"],
-                time_to_first_token=self.timing_stats["time_to_first_token"],
-                tokens_per_second=self.timing_stats["tokens_per_second"],
-                prompt_tokens=self.usage_stats["prompt_tokens"],
-                completion_tokens=self.usage_stats["completion_tokens"],
-                total_tokens=self.usage_stats["total_tokens"],
-                reasoning_time=self.timing_stats["reasoning_time"],
-                reasoning_tokens=self.timing_stats["reasoning_tokens"]
-            )
+        # Add usage stats
+        output.usage = LLMUsage(
+            stop_reason=self.usage_stats["stop_reason"],
+            time_to_first_token=self.timing_stats["time_to_first_token"] or 0.0,
+            tokens_per_second=self.timing_stats["tokens_per_second"],
+            prompt_tokens=self.usage_stats["prompt_tokens"],
+            completion_tokens=self.usage_stats["completion_tokens"],
+            total_tokens=self.usage_stats["total_tokens"],
+            reasoning_time=self.timing_stats["reasoning_time"],
+            reasoning_tokens=self.timing_stats["reasoning_tokens"]
+        )
             
         return output, buffer
 
