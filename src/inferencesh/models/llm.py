@@ -408,6 +408,10 @@ def stream_generate(
                     if "usage" in chunk and chunk["usage"] is not None:
                         usage_stats.update(chunk["usage"])
                     
+                    # Mark first token time as soon as we get any response
+                    if not timing.first_token_time:
+                        timing.mark_first_token()
+                    
                     delta = chunk.get("choices", [{}])[0]
                     content = ""
                     finish_reason = None
@@ -458,8 +462,6 @@ def stream_generate(
                     )
                     
                     if has_update or has_tool_update:
-                        if not timing.first_token_time:
-                            timing.mark_first_token()
                         response_queue.put((content, {}, tool_calls[:] if tool_calls else None))
                         
                     if finish_reason:
@@ -524,7 +526,7 @@ def stream_generate(
                 except Exception as e:
                     if thread_exception:
                         raise thread_exception
-                    raise  # Re-raise any other exceptions
+                    raise e # Re-raise any other exceptions
                     
         finally:
             if thread and thread.is_alive():
