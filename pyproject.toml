@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inferencesh"
-version = "0.2.18"
+version = "0.2.19"
 description = "inference.sh Python SDK"
 authors = [
     {name = "Inference Shell Inc.", email = "hello@inference.sh"},
