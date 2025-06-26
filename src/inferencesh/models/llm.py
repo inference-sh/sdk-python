@@ -325,7 +325,7 @@ class ResponseState:
         self.response = ""
         self.reasoning = None
         self.function_calls = None  # For future function calling support
-        self.tool_calls = []      # List to accumulate tool calls
+        self.tool_calls = None      # List to accumulate tool calls
         self.current_tool_call = None  # Track current tool call being built
         self.state_changes = {
             "reasoning_started": False,
