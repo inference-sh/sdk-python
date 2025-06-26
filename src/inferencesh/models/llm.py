@@ -366,9 +366,9 @@ class ResponseTransformer:
 def stream_generate(
     model: Any,
     messages: List[Dict[str, Any]],
-    tools: List[Dict[str, Any]],
-    tool_choice: Dict[str, Any],
-    transformer: ResponseTransformer,
+    transformer: ResponseTransformer = ResponseTransformer(),
+    tools: List[Dict[str, Any]] = [],
+    tool_choice: Dict[str, Any] = {},
     temperature: float = 0.7,
     top_p: float = 0.95,
     max_tokens: int = 4096,
