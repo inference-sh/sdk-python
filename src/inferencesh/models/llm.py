@@ -389,6 +389,9 @@ def stream_generate(
         
         def generation_thread():
             nonlocal thread_exception, usage_stats
+            tool_calls = []  # Initialize outside try block
+            current_tool = None
+            
             try:
                 completion = model.create_chat_completion(
                     messages=messages,
@@ -400,9 +403,6 @@ def stream_generate(
                     max_tokens=max_tokens,
                     stop=stop
                 )
-                
-                tool_calls = []
-                current_tool = None
                 
                 for chunk in completion:
                     if "usage" in chunk and chunk["usage"] is not None:
@@ -467,6 +467,9 @@ def stream_generate(
                 
             except Exception as e:
                 thread_exception = e
+                # Signal error to main thread
+                response_queue.put((None, {}, None))
+                raise  # Re-raise to ensure error is logged in thread
             finally:
                 timing_stats = timing.stats
                 generation_time = timing_stats["generation_time"]
@@ -490,8 +493,11 @@ def stream_generate(
                         raise thread_exception
                     
                     piece, timing_stats, tool_calls = result
-                    if piece is None:
-                        # Final yield with complete usage stats
+                    if piece is None and thread_exception:
+                        # Error case
+                        raise thread_exception
+                    elif piece is None:
+                        # Normal completion
                         usage = LLMUsage(
                             stop_reason=usage_stats["stop_reason"],
                             time_to_first_token=timing_stats["time_to_first_token"],
@@ -516,9 +522,10 @@ def stream_generate(
                     yield output
                     
                 except Exception as e:
-                    if thread_exception and isinstance(e, thread_exception.__class__):
+                    if thread_exception:
                         raise thread_exception
-                    break
+                    raise  # Re-raise any other exceptions
+                    
         finally:
             if thread and thread.is_alive():
                 thread.join(timeout=2.0) 
