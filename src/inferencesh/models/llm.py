@@ -237,13 +237,15 @@ class StreamResponse:
     def update_from_chunk(self, chunk: Dict[str, Any], timing: Any) -> None:
         """Update response state from a chunk."""
         # Update usage stats if present
-        if "usage" in chunk and chunk["usage"] is not None:
+        if "usage" in chunk:
             usage = chunk["usage"]
-            self.usage_stats.update({
-                "prompt_tokens": usage.get("prompt_tokens", self.usage_stats["prompt_tokens"]),
-                "completion_tokens": usage.get("completion_tokens", self.usage_stats["completion_tokens"]),
-                "total_tokens": usage.get("total_tokens", self.usage_stats["total_tokens"])
-            })
+            if usage is not None:
+                self.usage_stats = {
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                    "stop_reason": self.usage_stats["stop_reason"]  # Preserve existing stop reason
+                }
         
         # Get the delta from the chunk
         delta = chunk.get("choices", [{}])[0]
