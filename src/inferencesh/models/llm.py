@@ -1,4 +1,3 @@
-import logging
 from typing import Optional, List, Any, Callable, Dict, Generator
 from enum import Enum
 from pydantic import Field
@@ -10,8 +9,6 @@ import base64
 
 from .base import BaseAppInput, BaseAppOutput
 from .file import File
-
-logger = logging.getLogger(__name__)
 
 class ContextMessageRole(str, Enum):
     USER = "user"
