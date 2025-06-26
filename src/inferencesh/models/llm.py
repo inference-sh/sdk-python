@@ -147,51 +147,41 @@ def build_messages(
     transform_user_message: Optional[Callable[[str], str]] = None
 ) -> List[Dict[str, Any]]:
     """Build messages for LLaMA.cpp chat completion.
-    
-    Args:
-        input_data: The input data
-        transform_user_message: Optional function to transform user message text before building messages
-    """
-    messages = [
-        {
-            "role": "system",
-            "content": [{"type": "text", "text": input_data.system_prompt}],
-        }
-    ]
 
-    # Add context messages
-    for msg in input_data.context:
-        message_content = []
-        text = msg.text
-        if transform_user_message and msg.role == ContextMessageRole.USER:
-            text = transform_user_message(text)
+    If any message includes image content, builds OpenAI-style multipart format.
+    Otherwise, uses plain string-only format.
+    """
+    def render_message(msg: ContextMessage, allow_multipart: bool) -> str | List[dict]:
+        parts = []
+        text = transform_user_message(msg.text) if transform_user_message and msg.role == ContextMessageRole.USER else msg.text
         if text:
-            message_content.append({"type": "text", "text": text})
-        if hasattr(msg, 'image') and msg.image:
+            parts.append({"type": "text", "text": text})
+        if msg.image:
             if msg.image.path:
                 image_data_uri = image_to_base64_data_uri(msg.image.path)
-                message_content.append({"type": "image_url", "image_url": {"url": image_data_uri}})
+                parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
             elif msg.image.uri:
-                message_content.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
+                parts.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
+        if allow_multipart:
+            return parts
+        if len(parts) == 1 and parts[0]["type"] == "text":
+            return parts[0]["text"]
+        raise ValueError("Image content requires multipart support")
+
+    multipart = any(m.image for m in input_data.context) or input_data.image is not None
+    messages = [{"role": "system", "content": input_data.system_prompt}]
+
+    for msg in input_data.context:
         messages.append({
             "role": msg.role,
-            "content": message_content
+            "content": render_message(msg, allow_multipart=multipart)
         })
 
-    # Add user message
-    user_content = []
-    text = input_data.text
-    if transform_user_message:
-        text = transform_user_message(text)
-    if text:
-        user_content.append({"type": "text", "text": text})
-    if hasattr(input_data, 'image') and input_data.image:
-        if input_data.image.path:
-            image_data_uri = image_to_base64_data_uri(input_data.image.path)
-            user_content.append({"type": "image_url", "image_url": {"url": image_data_uri}})
-        elif input_data.image.uri:
-            user_content.append({"type": "image_url", "image_url": {"url": input_data.image.uri}})
-    messages.append({"role": "user", "content": user_content})
+    user_msg = ContextMessage(role=ContextMessageRole.USER, text=input_data.text, image=input_data.image)
+    messages.append({
+        "role": "user",
+        "content": render_message(user_msg, allow_multipart=multipart)
+    })
 
     return messages
 
