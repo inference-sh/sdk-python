@@ -116,7 +116,7 @@ def timing_context():
     class TimingInfo:
         def __init__(self):
             self.start_time = time.time()
-            self.first_token_time = None
+            self.first_token_time = 0
             self.reasoning_start_time = None
             self.total_reasoning_time = 0.0
             self.reasoning_tokens = 0
