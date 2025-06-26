@@ -238,15 +238,14 @@ class StreamResponse:
         """Update response state from a chunk."""
         # Update usage stats if present
         if "usage" in chunk:
-            print(chunk["usage"])
             usage = chunk["usage"]
             if usage is not None:
-                self.usage_stats = {
-                    "prompt_tokens": usage.get("prompt_tokens", 0),
-                    "completion_tokens": usage.get("completion_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
-                    "stop_reason": self.usage_stats["stop_reason"]  # Preserve existing stop reason
-                }
+                # Update usage stats preserving existing values if not provided
+                self.usage_stats.update({
+                    "prompt_tokens": usage.get("prompt_tokens", self.usage_stats["prompt_tokens"]),
+                    "completion_tokens": usage.get("completion_tokens", self.usage_stats["completion_tokens"]),
+                    "total_tokens": usage.get("total_tokens", self.usage_stats["total_tokens"])
+                })
         
         # Get the delta from the chunk
         delta = chunk.get("choices", [{}])[0]
