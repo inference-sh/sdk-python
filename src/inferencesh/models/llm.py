@@ -216,7 +216,8 @@ class ResponseState:
         self.response = ""
         self.reasoning = None
         self.function_calls = None  # For future function calling support
-        self.tool_calls = None      # For future tool calling support
+        self.tool_calls = []      # List to accumulate tool calls
+        self.current_tool_call = None  # Track current tool call being built
         self.state_changes = {
             "reasoning_started": False,
             "reasoning_ended": False,
@@ -373,17 +374,7 @@ def stream_generate(
     max_tokens: int = 4096,
     stop: Optional[List[str]] = None,
 ) -> Generator[LLMOutput, None, None]:
-    """Stream generate from LLaMA.cpp model with timing and usage tracking.
-    
-    Args:
-        model: The LLaMA.cpp model instance
-        messages: List of messages to send to the model
-        transformer: ResponseTransformer instance to use for processing output
-        temperature: Sampling temperature
-        top_p: Top-p sampling threshold
-        max_tokens: Maximum tokens to generate
-        stop: Optional list of stop sequences
-    """
+    """Stream generate from LLaMA.cpp model with timing and usage tracking."""
     response_queue: Queue[Optional[tuple[str, dict, Optional[List[Dict[str, Any]]]]]] = Queue()
     thread_exception = None
     usage_stats = {
@@ -394,7 +385,6 @@ def stream_generate(
     }
 
     with timing_context() as timing:
-        # Set timing context in transformer
         transformer.timing = timing
         
         def generation_thread():
@@ -411,30 +401,60 @@ def stream_generate(
                     stop=stop
                 )
                 
+                tool_calls = []
+                current_tool = None
+                
                 for chunk in completion:
                     if "usage" in chunk and chunk["usage"] is not None:
                         usage_stats.update(chunk["usage"])
                     
                     delta = chunk.get("choices", [{}])[0]
-                    content = None
+                    content = ""
                     finish_reason = None
-                    tool_calls = None
                     
+                    # Extract delta content from either message or delta
                     if "message" in delta:
                         message = delta["message"]
                         content = message.get("content", "")
-                        tool_calls = message.get("tool_calls")
+                        if "tool_calls" in message:
+                            for tool in message["tool_calls"]:
+                                if tool.get("id") not in {t.get("id") for t in tool_calls}:
+                                    tool_calls.append(tool)
                         finish_reason = delta.get("finish_reason")
                     elif "delta" in delta:
                         delta_content = delta["delta"]
                         content = delta_content.get("content", "")
-                        tool_calls = delta_content.get("tool_calls")
+                        
+                        # Handle streaming tool calls
+                        if "tool_calls" in delta_content:
+                            for tool_delta in delta_content["tool_calls"]:
+                                tool_id = tool_delta.get("id")
+                                
+                                # Find or create tool call
+                                if tool_id:
+                                    current_tool = next((t for t in tool_calls if t["id"] == tool_id), None)
+                                    if not current_tool:
+                                        current_tool = {
+                                            "id": tool_id,
+                                            "type": tool_delta.get("type", "function"),
+                                            "function": {"name": "", "arguments": ""}
+                                        }
+                                        tool_calls.append(current_tool)
+                                
+                                # Update tool call
+                                if current_tool and "function" in tool_delta:
+                                    func_delta = tool_delta["function"]
+                                    if "name" in func_delta:
+                                        current_tool["function"]["name"] = func_delta["name"]
+                                    if "arguments" in func_delta:
+                                        current_tool["function"]["arguments"] += func_delta["arguments"]
+                                        
                         finish_reason = delta.get("finish_reason")
                     
-                    if content or tool_calls:
+                    if content or "tool_calls" in (delta.get("message", {}) or delta.get("delta", {})):
                         if not timing.first_token_time:
                             timing.mark_first_token()
-                        response_queue.put((content or "", {}, tool_calls))
+                        response_queue.put((content, {}, tool_calls[:] if tool_calls else None))
                         
                     if finish_reason:
                         usage_stats["stop_reason"] = finish_reason
@@ -450,7 +470,7 @@ def stream_generate(
                     "tokens_per_second": tokens_per_second,
                     "reasoning_time": timing_stats["reasoning_time"],
                     "reasoning_tokens": timing_stats["reasoning_tokens"]
-                }, None))
+                }, tool_calls if tool_calls else None))
 
         thread = Thread(target=generation_thread, daemon=True)
         thread.start()
