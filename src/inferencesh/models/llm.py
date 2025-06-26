@@ -252,8 +252,16 @@ class StreamResponse:
                 self._update_tool_calls(delta_content["tool_calls"])
             self.finish_reason = delta.get("finish_reason")
         
-        # Update timing stats
-        self.timing_stats = timing.stats
+        # Update timing stats while preserving tokens_per_second
+        timing_stats = timing.stats
+        generation_time = timing_stats["generation_time"]
+        completion_tokens = self.usage_stats.get("completion_tokens", 0)
+        tokens_per_second = (completion_tokens / generation_time) if generation_time > 0 and completion_tokens > 0 else 0.0
+        
+        self.timing_stats.update({
+            **timing_stats,
+            "tokens_per_second": tokens_per_second
+        })
     
     def _update_tool_calls(self, new_tool_calls: List[Dict[str, Any]]) -> None:
         """Update tool calls, handling both full and partial updates."""
