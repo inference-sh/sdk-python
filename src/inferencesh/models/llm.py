@@ -304,7 +304,7 @@ class StreamResponse:
             output.tool_calls = self.tool_calls
             
         # Add usage stats if this is final
-        if self.finish_reason:
+        if self.usage_stats is not None:
             output.usage = LLMUsage(
                 stop_reason=self.usage_stats["stop_reason"],
                 time_to_first_token=self.timing_stats["time_to_first_token"],
