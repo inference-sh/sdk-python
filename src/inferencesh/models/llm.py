@@ -228,6 +228,7 @@ class ResponseTransformer:
     def __init__(self, output_cls: type[LLMOutput] = LLMOutput):
         self.state = ResponseState()
         self.output_cls = output_cls
+        self.timing = None  # Will be set by stream_generate
     
     def clean_text(self, text: str) -> str:
         """Clean common tokens from the text and apply model-specific cleaning.
@@ -264,10 +265,17 @@ class ResponseTransformer:
             text: Cleaned text to process for reasoning
         """
         # Default implementation for <think> style reasoning
-        if "<think>" in text:
+        if "<think>" in text and not self.state.state_changes["reasoning_started"]:
             self.state.state_changes["reasoning_started"] = True
-        if "</think>" in text:
+            if self.timing:
+                self.timing.start_reasoning()
+        
+        if "</think>" in text and not self.state.state_changes["reasoning_ended"]:
             self.state.state_changes["reasoning_ended"] = True
+            if self.timing:
+                # Estimate token count from character count (rough approximation)
+                token_count = len(self.state.buffer.split("<think>")[1].split("</think>")[0]) // 4
+                self.timing.end_reasoning(token_count)
         
         if "<think>" in self.state.buffer:
             parts = self.state.buffer.split("</think>", 1)
@@ -381,6 +389,9 @@ def stream_generate(
     }
 
     with timing_context() as timing:
+        # Set timing context in transformer
+        transformer.timing = timing
+        
         def generation_thread():
             nonlocal thread_exception, usage_stats
             try:
