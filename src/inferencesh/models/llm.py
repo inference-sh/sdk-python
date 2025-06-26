@@ -307,6 +307,24 @@ class StreamResponse:
             
         return output, buffer
 
+class ResponseState:
+    """Holds the state of response transformation."""
+    def __init__(self):
+        self.buffer = ""
+        self.response = ""
+        self.reasoning = None
+        self.function_calls = None  # For future function calling support
+        self.tool_calls = []      # List to accumulate tool calls
+        self.current_tool_call = None  # Track current tool call being built
+        self.state_changes = {
+            "reasoning_started": False,
+            "reasoning_ended": False,
+            "function_call_started": False,
+            "function_call_ended": False,
+            "tool_call_started": False,
+            "tool_call_ended": False
+        }
+
 class ResponseTransformer:
     """Base class for transforming model responses."""
     def __init__(self, output_cls: type[LLMOutput] = LLMOutput):
@@ -498,193 +516,4 @@ def stream_generate(
                     
         except Exception as e:
             # Ensure any error is properly propagated
-            raise e
-
-
-class ResponseState:
-    """Holds the state of response transformation."""
-    def __init__(self):
-        self.buffer = ""
-        self.response = ""
-        self.reasoning = None
-        self.function_calls = None  # For future function calling support
-        self.tool_calls = []      # List to accumulate tool calls
-        self.current_tool_call = None  # Track current tool call being built
-        self.state_changes = {
-            "reasoning_started": False,
-            "reasoning_ended": False,
-            "function_call_started": False,
-            "function_call_ended": False,
-            "tool_call_started": False,
-            "tool_call_ended": False
-        }
-
-
-def stream_generate(
-    model: Any,
-    messages: List[Dict[str, Any]],
-    transformer: ResponseTransformer = ResponseTransformer(),
-    tools: Optional[List[Dict[str, Any]]] = None,
-    tool_choice: Optional[Dict[str, Any]] = None,
-    temperature: float = 0.7,
-    top_p: float = 0.95,
-    max_tokens: int = 4096,
-    stop: Optional[List[str]] = None,
-) -> Generator[LLMOutput, None, None]:
-    """Stream generate from LLaMA.cpp model with timing and usage tracking."""
-    response_queue: Queue[Optional[tuple[str, dict, Optional[List[Dict[str, Any]]]]]] = Queue()
-    thread_exception = None
-    usage_stats = {
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-        "total_tokens": 0,
-        "stop_reason": ""
-    }
-
-    with timing_context() as timing:
-        transformer.timing = timing
-        
-        def generation_thread():
-            nonlocal thread_exception, usage_stats
-            tool_calls = []  # Initialize outside try block
-            current_tool = None
-            
-            try:
-                completion = model.create_chat_completion(
-                    messages=messages,
-                    tools=tools,
-                    tool_choice=tool_choice,
-                    stream=True,
-                    temperature=temperature,
-                    top_p=top_p,
-                    max_tokens=max_tokens,
-                    stop=stop
-                )
-                
-                for chunk in completion:
-                    if "usage" in chunk and chunk["usage"] is not None:
-                        usage_stats.update(chunk["usage"])
-                    
-                    # Mark first token time as soon as we get any response
-                    if not timing.first_token_time:
-                        timing.mark_first_token()
-                    
-                    delta = chunk.get("choices", [{}])[0]
-                    content = ""
-                    finish_reason = None
-                    
-                    # Extract delta content from either message or delta
-                    if "message" in delta:
-                        message = delta["message"]
-                        content = message.get("content", "")
-                        if message.get("tool_calls"):
-                            for tool in message["tool_calls"]:
-                                if tool.get("id") not in {t.get("id") for t in tool_calls}:
-                                    tool_calls.append(tool)
-                        finish_reason = delta.get("finish_reason")
-                    elif "delta" in delta:
-                        delta_content = delta["delta"]
-                        content = delta_content.get("content", "")
-                        
-                        # Handle streaming tool calls
-                        if delta_content.get("tool_calls"):
-                            for tool_delta in delta_content["tool_calls"]:
-                                tool_id = tool_delta.get("id")
-                                
-                                # Find or create tool call
-                                if tool_id:
-                                    current_tool = next((t for t in tool_calls if t["id"] == tool_id), None)
-                                    if not current_tool:
-                                        current_tool = {
-                                            "id": tool_id,
-                                            "type": tool_delta.get("type", "function"),
-                                            "function": {"name": "", "arguments": ""}
-                                        }
-                                        tool_calls.append(current_tool)
-                                
-                                # Update tool call
-                                if current_tool and "function" in tool_delta:
-                                    func_delta = tool_delta["function"]
-                                    if "name" in func_delta:
-                                        current_tool["function"]["name"] = func_delta["name"]
-                                    if "arguments" in func_delta:
-                                        current_tool["function"]["arguments"] += func_delta["arguments"]
-                                        
-                        finish_reason = delta.get("finish_reason")
-                    
-                    has_update = bool(content)
-                    has_tool_update = bool(
-                        (delta.get("message", {}) or {}).get("tool_calls") or
-                        (delta.get("delta", {}) or {}).get("tool_calls")
-                    )
-                    
-                    if has_update or has_tool_update:
-                        response_queue.put((content, {}, tool_calls[:] if tool_calls else None))
-                        
-                    if finish_reason:
-                        usage_stats["stop_reason"] = finish_reason
-                
-            except Exception as e:
-                thread_exception = e
-                # Signal error to main thread
-                response_queue.put((None, {}, None))
-                raise  # Re-raise to ensure error is logged in thread
-            finally:
-                timing_stats = timing.stats
-                generation_time = timing_stats["generation_time"]
-                tokens_per_second = (usage_stats["completion_tokens"] / generation_time) if generation_time > 0 else 0
-                response_queue.put((None, {
-                    "time_to_first_token": timing_stats["time_to_first_token"],
-                    "tokens_per_second": tokens_per_second,
-                    "reasoning_time": timing_stats["reasoning_time"],
-                    "reasoning_tokens": timing_stats["reasoning_tokens"]
-                }, tool_calls if tool_calls else None))
-
-        thread = Thread(target=generation_thread, daemon=True)
-        thread.start()
-
-        buffer = ""
-        try:
-            while True:
-                try:
-                    result = response_queue.get(timeout=30.0)
-                    if thread_exception:
-                        raise thread_exception
-                    
-                    piece, timing_stats, tool_calls = result
-                    if piece is None and thread_exception:
-                        # Error case
-                        raise thread_exception
-                    elif piece is None:
-                        # Normal completion
-                        usage = LLMUsage(
-                            stop_reason=usage_stats["stop_reason"],
-                            time_to_first_token=timing_stats["time_to_first_token"],
-                            tokens_per_second=timing_stats["tokens_per_second"],
-                            prompt_tokens=usage_stats["prompt_tokens"],
-                            completion_tokens=usage_stats["completion_tokens"],
-                            total_tokens=usage_stats["total_tokens"],
-                            reasoning_time=timing_stats["reasoning_time"],
-                            reasoning_tokens=timing_stats["reasoning_tokens"]
-                        )
-                        
-                        buffer, output, _ = transformer(piece or "", buffer)
-                        output.usage = usage
-                        if tool_calls:
-                            output.tool_calls = tool_calls
-                        yield output
-                        break
-
-                    buffer, output, _ = transformer(piece, buffer)
-                    if tool_calls:
-                        output.tool_calls = tool_calls
-                    yield output
-                    
-                except Exception as e:
-                    if thread_exception:
-                        raise thread_exception
-                    raise e # Re-raise any other exceptions
-                    
-        finally:
-            if thread and thread.is_alive():
-                thread.join(timeout=2.0) 
+            raise e 
