@@ -192,7 +192,7 @@ def build_messages(
         raise ValueError("Image content requires multipart support")
 
     multipart = any(m.image for m in input_data.context) or input_data.image is not None
-    messages = [{"role": "system", "content": input_data.system_prompt}]
+    messages = [{"role": "system", "content": input_data.system_prompt}] if input_data.system_prompt is not None and input_data.system_prompt != "" else []
 
     for msg in input_data.context:
         messages.append({
