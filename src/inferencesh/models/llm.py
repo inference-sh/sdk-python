@@ -209,23 +209,103 @@ def build_messages(
     return messages
 
 
-class ResponseState:
-    """Holds the state of response transformation."""
+class StreamResponse:
+    """Holds a single chunk of streamed response."""
     def __init__(self):
-        self.buffer = ""
-        self.response = ""
-        self.reasoning = None
-        self.function_calls = None  # For future function calling support
-        self.tool_calls = []      # List to accumulate tool calls
-        self.current_tool_call = None  # Track current tool call being built
-        self.state_changes = {
-            "reasoning_started": False,
-            "reasoning_ended": False,
-            "function_call_started": False,
-            "function_call_ended": False,
-            "tool_call_started": False,
-            "tool_call_ended": False
+        self.content = ""
+        self.tool_calls = []
+        self.finish_reason = None
+        self.timing_stats = {
+            "time_to_first_token": 0.0,
+            "generation_time": 0.0,
+            "reasoning_time": 0.0,
+            "reasoning_tokens": 0,
+            "tokens_per_second": 0.0
         }
+        self.usage_stats = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "stop_reason": ""
+        }
+
+    def update_from_chunk(self, chunk: Dict[str, Any], timing: Any) -> None:
+        """Update response state from a chunk."""
+        # Update usage stats if present
+        if "usage" in chunk and chunk["usage"] is not None:
+            self.usage_stats.update(chunk["usage"])
+        
+        # Get the delta from the chunk
+        delta = chunk.get("choices", [{}])[0]
+        
+        # Extract content and tool calls from either message or delta
+        if "message" in delta:
+            message = delta["message"]
+            self.content = message.get("content", "")
+            if message.get("tool_calls"):
+                self._update_tool_calls(message["tool_calls"])
+            self.finish_reason = delta.get("finish_reason")
+        elif "delta" in delta:
+            delta_content = delta["delta"]
+            self.content = delta_content.get("content", "")
+            if delta_content.get("tool_calls"):
+                self._update_tool_calls(delta_content["tool_calls"])
+            self.finish_reason = delta.get("finish_reason")
+        
+        # Update timing stats
+        self.timing_stats = timing.stats
+    
+    def _update_tool_calls(self, new_tool_calls: List[Dict[str, Any]]) -> None:
+        """Update tool calls, handling both full and partial updates."""
+        for tool_delta in new_tool_calls:
+            tool_id = tool_delta.get("id")
+            if not tool_id:
+                continue
+                
+            # Find or create tool call
+            current_tool = next((t for t in self.tool_calls if t["id"] == tool_id), None)
+            if not current_tool:
+                current_tool = {
+                    "id": tool_id,
+                    "type": tool_delta.get("type", "function"),
+                    "function": {"name": "", "arguments": ""}
+                }
+                self.tool_calls.append(current_tool)
+            
+            # Update tool call
+            if "function" in tool_delta:
+                func_delta = tool_delta["function"]
+                if "name" in func_delta:
+                    current_tool["function"]["name"] = func_delta["name"]
+                if "arguments" in func_delta:
+                    current_tool["function"]["arguments"] += func_delta["arguments"]
+    
+    def has_updates(self) -> bool:
+        """Check if this response has any content or tool call updates."""
+        return bool(self.content) or bool(self.tool_calls)
+    
+    def to_output(self, buffer: str, transformer: Any) -> LLMOutput:
+        """Convert current state to LLMOutput."""
+        buffer, output, _ = transformer(self.content, buffer)
+        
+        # Add tool calls if present
+        if self.tool_calls:
+            output.tool_calls = self.tool_calls
+            
+        # Add usage stats if this is final
+        if self.finish_reason:
+            output.usage = LLMUsage(
+                stop_reason=self.usage_stats["stop_reason"],
+                time_to_first_token=self.timing_stats["time_to_first_token"],
+                tokens_per_second=self.timing_stats["tokens_per_second"],
+                prompt_tokens=self.usage_stats["prompt_tokens"],
+                completion_tokens=self.usage_stats["completion_tokens"],
+                total_tokens=self.usage_stats["total_tokens"],
+                reasoning_time=self.timing_stats["reasoning_time"],
+                reasoning_tokens=self.timing_stats["reasoning_tokens"]
+            )
+            
+        return output, buffer
 
 class ResponseTransformer:
     """Base class for transforming model responses."""
@@ -361,6 +441,83 @@ class ResponseTransformer:
         self.state.buffer = buffer
         self.transform_chunk(piece)
         return self.build_output()
+
+
+def stream_generate(
+    model: Any,
+    messages: List[Dict[str, Any]],
+    transformer: ResponseTransformer = ResponseTransformer(),
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_choice: Optional[Dict[str, Any]] = None,
+    temperature: float = 0.7,
+    top_p: float = 0.95,
+    max_tokens: int = 4096,
+    stop: Optional[List[str]] = None,
+) -> Generator[LLMOutput, None, None]:
+    """Stream generate from LLaMA.cpp model with timing and usage tracking."""
+    with timing_context() as timing:
+        transformer.timing = timing
+        
+        # Build completion kwargs
+        completion_kwargs = {
+            "messages": messages,
+            "stream": True,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens,
+            "stop": stop
+        }
+        if tools is not None:
+            completion_kwargs["tools"] = tools
+        if tool_choice is not None:
+            completion_kwargs["tool_choice"] = tool_choice
+        
+        # Initialize response state
+        response = StreamResponse()
+        buffer = ""
+        
+        try:
+            completion = model.create_chat_completion(**completion_kwargs)
+            
+            for chunk in completion:
+                # Mark first token time as soon as we get any response
+                if not timing.first_token_time:
+                    timing.mark_first_token()
+                
+                # Update response state from chunk
+                response.update_from_chunk(chunk, timing)
+                
+                # Yield output if we have updates
+                if response.has_updates():
+                    output, buffer = response.to_output(buffer, transformer)
+                    yield output
+                
+                # Break if we're done
+                if response.finish_reason:
+                    break
+                    
+        except Exception as e:
+            # Ensure any error is properly propagated
+            raise e
+
+
+class ResponseState:
+    """Holds the state of response transformation."""
+    def __init__(self):
+        self.buffer = ""
+        self.response = ""
+        self.reasoning = None
+        self.function_calls = None  # For future function calling support
+        self.tool_calls = []      # List to accumulate tool calls
+        self.current_tool_call = None  # Track current tool call being built
+        self.state_changes = {
+            "reasoning_started": False,
+            "reasoning_ended": False,
+            "function_call_started": False,
+            "function_call_ended": False,
+            "tool_call_started": False,
+            "tool_call_ended": False
+        }
 
 
 def stream_generate(
