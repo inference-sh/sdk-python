@@ -238,6 +238,7 @@ class StreamResponse:
         """Update response state from a chunk."""
         # Update usage stats if present
         if "usage" in chunk:
+            print(chunk["usage"])
             usage = chunk["usage"]
             if usage is not None:
                 self.usage_stats = {
