@@ -89,6 +89,8 @@ class LLMInput(BaseAppInput):
     
     # Model specific flags
     reasoning: bool = Field(default=False)
+    
+    tools: List[Dict[str, Any]] = Field(default=[])
 
 class LLMUsage(BaseAppOutput):
     stop_reason: str = ""
@@ -104,6 +106,7 @@ class LLMUsage(BaseAppOutput):
 class LLMOutput(BaseAppOutput):
     response: str
     reasoning: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
     usage: Optional[LLMUsage] = None
 
 
@@ -362,6 +365,8 @@ class ResponseTransformer:
 def stream_generate(
     model: Any,
     messages: List[Dict[str, Any]],
+    tools: List[Dict[str, Any]],
+    tool_choice: Dict[str, Any],
     transformer: ResponseTransformer,
     temperature: float = 0.7,
     top_p: float = 0.95,
@@ -379,7 +384,7 @@ def stream_generate(
         max_tokens: Maximum tokens to generate
         stop: Optional list of stop sequences
     """
-    response_queue: Queue[Optional[tuple[str, dict]]] = Queue()
+    response_queue: Queue[Optional[tuple[str, dict, Optional[List[Dict[str, Any]]]]]] = Queue()
     thread_exception = None
     usage_stats = {
         "prompt_tokens": 0,
@@ -397,6 +402,8 @@ def stream_generate(
             try:
                 completion = model.create_chat_completion(
                     messages=messages,
+                    tools=tools,
+                    tool_choice=tool_choice,
                     stream=True,
                     temperature=temperature,
                     top_p=top_p,
@@ -411,18 +418,23 @@ def stream_generate(
                     delta = chunk.get("choices", [{}])[0]
                     content = None
                     finish_reason = None
+                    tool_calls = None
                     
                     if "message" in delta:
-                        content = delta["message"].get("content", "")
+                        message = delta["message"]
+                        content = message.get("content", "")
+                        tool_calls = message.get("tool_calls")
                         finish_reason = delta.get("finish_reason")
                     elif "delta" in delta:
-                        content = delta["delta"].get("content", "")
+                        delta_content = delta["delta"]
+                        content = delta_content.get("content", "")
+                        tool_calls = delta_content.get("tool_calls")
                         finish_reason = delta.get("finish_reason")
                     
-                    if content:
+                    if content or tool_calls:
                         if not timing.first_token_time:
                             timing.mark_first_token()
-                        response_queue.put((content, {}))
+                        response_queue.put((content or "", {}, tool_calls))
                         
                     if finish_reason:
                         usage_stats["stop_reason"] = finish_reason
@@ -438,7 +450,7 @@ def stream_generate(
                     "tokens_per_second": tokens_per_second,
                     "reasoning_time": timing_stats["reasoning_time"],
                     "reasoning_tokens": timing_stats["reasoning_tokens"]
-                }))
+                }, None))
 
         thread = Thread(target=generation_thread, daemon=True)
         thread.start()
@@ -451,7 +463,7 @@ def stream_generate(
                     if thread_exception:
                         raise thread_exception
                     
-                    piece, timing_stats = result
+                    piece, timing_stats, tool_calls = result
                     if piece is None:
                         # Final yield with complete usage stats
                         usage = LLMUsage(
@@ -467,10 +479,14 @@ def stream_generate(
                         
                         buffer, output, _ = transformer(piece or "", buffer)
                         output.usage = usage
+                        if tool_calls:
+                            output.tool_calls = tool_calls
                         yield output
                         break
 
                     buffer, output, _ = transformer(piece, buffer)
+                    if tool_calls:
+                        output.tool_calls = tool_calls
                     yield output
                     
                 except Exception as e:
