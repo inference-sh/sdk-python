@@ -88,7 +88,7 @@ class LLMInput(BaseAppInput):
     context_size: int = Field(default=4096)
     
     # Model specific flags
-    enable_thinking: bool = Field(default=False)
+    reasoning: bool = Field(default=False)
 
 class LLMUsage(BaseAppOutput):
     stop_reason: str = ""
@@ -97,11 +97,13 @@ class LLMUsage(BaseAppOutput):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    reasoning_tokens: int = 0
+    reasoning_time: float = 0.0
 
 
 class LLMOutput(BaseAppOutput):
     response: str
-    thinking_content: Optional[str] = None
+    reasoning: Optional[str] = None
     usage: Optional[LLMUsage] = None
 
 
@@ -112,10 +114,26 @@ def timing_context():
         def __init__(self):
             self.start_time = time.time()
             self.first_token_time = None
+            self.reasoning_start_time = None
+            self.total_reasoning_time = 0.0
+            self.reasoning_tokens = 0
+            self.in_reasoning = False
         
         def mark_first_token(self):
             if self.first_token_time is None:
                 self.first_token_time = time.time()
+        
+        def start_reasoning(self):
+            if not self.in_reasoning:
+                self.reasoning_start_time = time.time()
+                self.in_reasoning = True
+        
+        def end_reasoning(self, token_count: int = 0):
+            if self.in_reasoning and self.reasoning_start_time:
+                self.total_reasoning_time += time.time() - self.reasoning_start_time
+                self.reasoning_tokens += token_count
+                self.reasoning_start_time = None
+                self.in_reasoning = False
         
         @property
         def stats(self):
@@ -128,7 +146,9 @@ def timing_context():
             
             return {
                 "time_to_first_token": time_to_first,
-                "generation_time": generation_time
+                "generation_time": generation_time,
+                "reasoning_time": self.total_reasoning_time,
+                "reasoning_tokens": self.reasoning_tokens
             }
     
     timing = TimingInfo()
@@ -186,29 +206,170 @@ def build_messages(
     return messages
 
 
+class ResponseState:
+    """Holds the state of response transformation."""
+    def __init__(self):
+        self.buffer = ""
+        self.response = ""
+        self.reasoning = None
+        self.function_calls = None  # For future function calling support
+        self.tool_calls = None      # For future tool calling support
+        self.state_changes = {
+            "reasoning_started": False,
+            "reasoning_ended": False,
+            "function_call_started": False,
+            "function_call_ended": False,
+            "tool_call_started": False,
+            "tool_call_ended": False
+        }
+
+class ResponseTransformer:
+    """Base class for transforming model responses."""
+    def __init__(self, output_cls: type[LLMOutput] = LLMOutput):
+        self.state = ResponseState()
+        self.output_cls = output_cls
+    
+    def clean_text(self, text: str) -> str:
+        """Clean common tokens from the text and apply model-specific cleaning.
+        
+        Args:
+            text: Raw text to clean
+            
+        Returns:
+            Cleaned text with common and model-specific tokens removed
+        """
+        # Common token cleaning across most models
+        cleaned = (text.replace("<|im_end|>", "")
+                      .replace("<|im_start|>", "")
+                      .replace("<start_of_turn>", "")
+                      .replace("<end_of_turn>", "")
+                      .replace("<eos>", ""))
+        return self.additional_cleaning(cleaned)
+    
+    def additional_cleaning(self, text: str) -> str:
+        """Apply model-specific token cleaning.
+        
+        Args:
+            text: Text that has had common tokens removed
+            
+        Returns:
+            Text with model-specific tokens removed
+        """
+        return text
+    
+    def handle_reasoning(self, text: str) -> None:
+        """Handle reasoning/thinking detection and extraction.
+        
+        Args:
+            text: Cleaned text to process for reasoning
+        """
+        # Default implementation for <think> style reasoning
+        if "<think>" in text:
+            self.state.state_changes["reasoning_started"] = True
+        if "</think>" in text:
+            self.state.state_changes["reasoning_ended"] = True
+        
+        if "<think>" in self.state.buffer:
+            parts = self.state.buffer.split("</think>", 1)
+            if len(parts) > 1:
+                self.state.reasoning = parts[0].split("<think>", 1)[1].strip()
+                self.state.response = parts[1].strip()
+            else:
+                self.state.reasoning = self.state.buffer.split("<think>", 1)[1].strip()
+                self.state.response = ""
+        else:
+            self.state.response = self.state.buffer
+    
+    def handle_function_calls(self, text: str) -> None:
+        """Handle function call detection and extraction.
+        
+        Args:
+            text: Cleaned text to process for function calls
+        """
+        # Default no-op implementation
+        # Models can override this to implement function call handling
+        pass
+    
+    def handle_tool_calls(self, text: str) -> None:
+        """Handle tool call detection and extraction.
+        
+        Args:
+            text: Cleaned text to process for tool calls
+        """
+        # Default no-op implementation
+        # Models can override this to implement tool call handling
+        pass
+    
+    def transform_chunk(self, chunk: str) -> None:
+        """Transform a single chunk of model output.
+        
+        This method orchestrates the transformation process by:
+        1. Cleaning the text
+        2. Updating the buffer
+        3. Processing various capabilities (reasoning, function calls, etc)
+        
+        Args:
+            chunk: Raw text chunk from the model
+        """
+        cleaned = self.clean_text(chunk)
+        self.state.buffer += cleaned
+        
+        # Process different capabilities
+        self.handle_reasoning(cleaned)
+        self.handle_function_calls(cleaned)
+        self.handle_tool_calls(cleaned)
+    
+    def build_output(self) -> tuple[str, LLMOutput, dict]:
+        """Build the final output tuple.
+        
+        Returns:
+            Tuple of (buffer, LLMOutput, state_changes)
+        """
+        return (
+            self.state.buffer,
+            self.output_cls(
+                response=self.state.response.strip(),
+                reasoning=self.state.reasoning.strip() if self.state.reasoning else None,
+                function_calls=self.state.function_calls,
+                tool_calls=self.state.tool_calls
+            ),
+            self.state.state_changes
+        )
+    
+    def __call__(self, piece: str, buffer: str) -> tuple[str, LLMOutput, dict]:
+        """Transform a piece of text and return the result.
+        
+        Args:
+            piece: New piece of text to transform
+            buffer: Existing buffer content
+            
+        Returns:
+            Tuple of (new_buffer, output, state_changes)
+        """
+        self.state.buffer = buffer
+        self.transform_chunk(piece)
+        return self.build_output()
+
+
 def stream_generate(
     model: Any,
     messages: List[Dict[str, Any]],
-    output_cls: type[LLMOutput],
+    transformer: ResponseTransformer,
     temperature: float = 0.7,
     top_p: float = 0.95,
     max_tokens: int = 4096,
     stop: Optional[List[str]] = None,
-    handle_thinking: bool = False,
-    transform_response: Optional[Callable[[str, str], tuple[str, LLMOutput]]] = None,
 ) -> Generator[LLMOutput, None, None]:
     """Stream generate from LLaMA.cpp model with timing and usage tracking.
     
     Args:
         model: The LLaMA.cpp model instance
         messages: List of messages to send to the model
-        output_cls: Output class type to use for responses
+        transformer: ResponseTransformer instance to use for processing output
         temperature: Sampling temperature
         top_p: Top-p sampling threshold
         max_tokens: Maximum tokens to generate
         stop: Optional list of stop sequences
-        handle_thinking: Whether to handle thinking tags
-        transform_response: Optional function to transform responses, takes (piece, buffer) and returns (new_buffer, output)
     """
     response_queue: Queue[Optional[tuple[str, dict]]] = Queue()
     thread_exception = None
@@ -233,11 +394,9 @@ def stream_generate(
                 )
                 
                 for chunk in completion:
-                    # Get usage from root level if present
                     if "usage" in chunk and chunk["usage"] is not None:
                         usage_stats.update(chunk["usage"])
                     
-                    # Get content from choices
                     delta = chunk.get("choices", [{}])[0]
                     content = None
                     finish_reason = None
@@ -265,15 +424,15 @@ def stream_generate(
                 tokens_per_second = (usage_stats["completion_tokens"] / generation_time) if generation_time > 0 else 0
                 response_queue.put((None, {
                     "time_to_first_token": timing_stats["time_to_first_token"],
-                    "tokens_per_second": tokens_per_second
+                    "tokens_per_second": tokens_per_second,
+                    "reasoning_time": timing_stats["reasoning_time"],
+                    "reasoning_tokens": timing_stats["reasoning_tokens"]
                 }))
 
         thread = Thread(target=generation_thread, daemon=True)
         thread.start()
 
         buffer = ""
-        thinking_content = "" if handle_thinking else None
-        in_thinking = handle_thinking
         try:
             while True:
                 try:
@@ -290,59 +449,18 @@ def stream_generate(
                             tokens_per_second=timing_stats["tokens_per_second"],
                             prompt_tokens=usage_stats["prompt_tokens"],
                             completion_tokens=usage_stats["completion_tokens"],
-                            total_tokens=usage_stats["total_tokens"]
+                            total_tokens=usage_stats["total_tokens"],
+                            reasoning_time=timing_stats["reasoning_time"],
+                            reasoning_tokens=timing_stats["reasoning_tokens"]
                         )
                         
-                        if transform_response:
-                            buffer, output = transform_response(piece or "", buffer)
-                            output.usage = usage
-                            yield output
-                        else:
-                            # Handle thinking vs response content if enabled
-                            if handle_thinking and "</think>" in piece:
-                                parts = piece.split("</think>")
-                                if in_thinking:
-                                    thinking_content += parts[0].replace("<think>", "")
-                                    buffer = parts[1] if len(parts) > 1 else ""
-                                    in_thinking = False
-                                else:
-                                    buffer += piece
-                            else:
-                                if in_thinking:
-                                    thinking_content += piece.replace("<think>", "")
-                                else:
-                                    buffer += piece
-                                    
-                            yield output_cls(
-                                response=buffer.strip(),
-                                thinking_content=thinking_content.strip() if thinking_content else None,
-                                usage=usage
-                            )
+                        buffer, output, _ = transformer(piece or "", buffer)
+                        output.usage = usage
+                        yield output
                         break
 
-                    if transform_response:
-                        buffer, output = transform_response(piece, buffer)
-                        yield output
-                    else:
-                        # Handle thinking vs response content if enabled
-                        if handle_thinking and "</think>" in piece:
-                            parts = piece.split("</think>")
-                            if in_thinking:
-                                thinking_content += parts[0].replace("<think>", "")
-                                buffer = parts[1] if len(parts) > 1 else ""
-                                in_thinking = False
-                            else:
-                                buffer += piece
-                        else:
-                            if in_thinking:
-                                thinking_content += piece.replace("<think>", "")
-                            else:
-                                buffer += piece
-
-                        yield output_cls(
-                            response=buffer.strip(),
-                            thinking_content=thinking_content.strip() if thinking_content else None
-                        )
+                    buffer, output, _ = transformer(piece, buffer)
+                    yield output
                     
                 except Exception as e:
                     if thread_exception and isinstance(e, thread_exception.__class__):
