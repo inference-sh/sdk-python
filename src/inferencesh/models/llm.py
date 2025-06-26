@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, List, Any, Callable, Dict, Generator
 from enum import Enum
 from pydantic import Field
@@ -10,6 +11,7 @@ import base64
 from .base import BaseAppInput, BaseAppOutput
 from .file import File
 
+logger = logging.getLogger(__name__)
 
 class ContextMessageRole(str, Enum):
     USER = "user"
@@ -322,10 +324,15 @@ class StreamResponse:
                     current_tool["function"]["arguments"] += func_delta["arguments"]
     
     def has_updates(self) -> bool:
-        """Check if this response has any content or tool call updates."""
-        has_updates = bool(self.content) or bool(self.tool_calls)
-        print(f"DEBUG: has_updates: {has_updates}, content: {bool(self.content)}, tool_calls: {bool(self.tool_calls)}")
-        return has_updates
+        """Check if this response has any content, tool call, or usage updates."""
+        has_content = bool(self.content)
+        has_tool_calls = bool(self.tool_calls)
+        has_usage = self.usage_stats["prompt_tokens"] > 0 or self.usage_stats["completion_tokens"] > 0
+        has_finish = bool(self.finish_reason)
+        
+        print(f"DEBUG: has_updates check - content: {has_content}, tool_calls: {has_tool_calls}, usage: {has_usage}, finish: {has_finish}")
+                    
+        return has_content or has_tool_calls or has_usage or has_finish
     
     def to_output(self, buffer: str, transformer: Any) -> LLMOutput:
         """Convert current state to LLMOutput."""
