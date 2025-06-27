@@ -235,22 +235,16 @@ class StreamResponse:
 
     def update_from_chunk(self, chunk: Dict[str, Any], timing: Any) -> None:
         """Update response state from a chunk."""
-        print("DEBUG: Entering update_from_chunk")
-        print(f"DEBUG: Current usage stats: {self.usage_stats}")
-        print(f"DEBUG: Chunk: {chunk}")
-        
         # Update usage stats if present
         if "usage" in chunk:
             usage = chunk["usage"]
             if usage is not None:
-                print(f"DEBUG: Updating usage stats with: {usage}")
                 # Update usage stats preserving existing values if not provided
                 self.usage_stats.update({
                     "prompt_tokens": usage.get("prompt_tokens", self.usage_stats["prompt_tokens"]),
                     "completion_tokens": usage.get("completion_tokens", self.usage_stats["completion_tokens"]),
                     "total_tokens": usage.get("total_tokens", self.usage_stats["total_tokens"])
                 })
-                print(f"DEBUG: Updated usage stats: {self.usage_stats}")
         
         # Get the delta from the chunk
         delta = chunk.get("choices", [{}])[0]
@@ -290,7 +284,6 @@ class StreamResponse:
                 self.usage_stats["completion_tokens"] / timing_stats["generation_time"]
             )
         
-        print(f"DEBUG: Final usage stats in update_from_chunk: {self.usage_stats}")
     
     def _update_tool_calls(self, new_tool_calls: List[Dict[str, Any]]) -> None:
         """Update tool calls, handling both full and partial updates."""
@@ -327,15 +320,10 @@ class StreamResponse:
         has_usage = self.usage_stats["prompt_tokens"] > 0 or self.usage_stats["completion_tokens"] > 0
         has_finish = bool(self.finish_reason)
         
-        print(f"DEBUG: has_updates check - content: {has_content}, tool_calls: {has_tool_calls}, usage: {has_usage}, finish: {has_finish}")
-                    
         return has_content or has_tool_calls or has_usage or has_finish
     
     def to_output(self, buffer: str, transformer: Any) -> LLMOutput:
-        """Convert current state to LLMOutput."""
-        print("DEBUG: Entering to_output")
-        print(f"DEBUG: Usage stats before conversion: {self.usage_stats}")
-        
+        """Convert current state to LLMOutput."""        
         buffer, output, _ = transformer(self.content, buffer)
         
         # Add tool calls if present
@@ -343,7 +331,6 @@ class StreamResponse:
             output.tool_calls = self.tool_calls
             
         # Add usage stats
-        print(f"DEBUG: Creating LLMUsage with stats: {self.usage_stats}")
         output.usage = LLMUsage(
             stop_reason=self.usage_stats["stop_reason"],
             time_to_first_token=self.timing_stats["time_to_first_token"] or 0.0,
@@ -354,7 +341,6 @@ class StreamResponse:
             reasoning_time=self.timing_stats["reasoning_time"],
             reasoning_tokens=self.timing_stats["reasoning_tokens"]
         )
-        print(f"DEBUG: Created output usage: {output.usage}")
             
         return output, buffer
 
