@@ -117,7 +117,8 @@ class BaseLLMOutput(BaseAppOutput):
 class LLMUsageMixin(BaseModel):
     """Mixin for models that provide token usage statistics."""
     usage: Optional[LLMUsage] = Field(
-        description="Token usage statistics"
+        description="Token usage statistics",
+        default=None
     )
 
 # Example of how to use:
@@ -386,7 +387,7 @@ class ResponseState:
 
 class ResponseTransformer:
     """Base class for transforming model responses."""
-    def __init__(self, output_cls: type[LLMOutput] = LLMOutput):
+    def __init__(self, output_cls: type[BaseLLMOutput] = LLMOutput):
         self.state = ResponseState()
         self.output_cls = output_cls
         self.timing = None  # Will be set by stream_generate
