@@ -342,25 +342,26 @@ class StreamResponse:
         
         return has_content or has_tool_calls or has_usage or has_finish
     
-    def to_output(self, buffer: str, transformer: Any) -> LLMOutput:
+    def to_output(self, buffer: str, transformer: Any) -> tuple[BaseLLMOutput, str]:
         """Convert current state to LLMOutput."""        
         buffer, output, _ = transformer(self.content, buffer)
         
-        # Add tool calls if present
-        if self.tool_calls:
+        # Add tool calls if present and supported
+        if self.tool_calls and hasattr(output, 'tool_calls'):
             output.tool_calls = self.tool_calls
             
-        # Add usage stats
-        output.usage = LLMUsage(
-            stop_reason=self.usage_stats["stop_reason"],
-            time_to_first_token=self.timing_stats["time_to_first_token"] or 0.0,
-            tokens_per_second=self.timing_stats["tokens_per_second"],
-            prompt_tokens=self.usage_stats["prompt_tokens"],
-            completion_tokens=self.usage_stats["completion_tokens"],
-            total_tokens=self.usage_stats["total_tokens"],
-            reasoning_time=self.timing_stats["reasoning_time"],
-            reasoning_tokens=self.timing_stats["reasoning_tokens"]
-        )
+        # Add usage stats if supported
+        if hasattr(output, 'usage'):
+            output.usage = LLMUsage(
+                stop_reason=self.usage_stats["stop_reason"],
+                time_to_first_token=self.timing_stats["time_to_first_token"] or 0.0,
+                tokens_per_second=self.timing_stats["tokens_per_second"],
+                prompt_tokens=self.usage_stats["prompt_tokens"],
+                completion_tokens=self.usage_stats["completion_tokens"],
+                total_tokens=self.usage_stats["total_tokens"],
+                reasoning_time=self.timing_stats["reasoning_time"],
+                reasoning_tokens=self.timing_stats["reasoning_tokens"]
+            )
             
         return output, buffer
 
@@ -495,14 +496,22 @@ class ResponseTransformer:
         Returns:
             Tuple of (buffer, LLMOutput, state_changes)
         """
+        output = self.output_cls(
+            response=self.state.response.strip(),
+            text=self.state.response.strip()  # text is required by BaseLLMOutput
+        )
+        
+        # Add optional fields if supported
+        if hasattr(output, 'reasoning') and self.state.reasoning:
+            output.reasoning = self.state.reasoning.strip()
+        if hasattr(output, 'function_calls') and self.state.function_calls:
+            output.function_calls = self.state.function_calls
+        if hasattr(output, 'tool_calls') and self.state.tool_calls:
+            output.tool_calls = self.state.tool_calls
+            
         return (
             self.state.buffer,
-            self.output_cls(
-                response=self.state.response.strip(),
-                reasoning=self.state.reasoning.strip() if self.state.reasoning else None,
-                function_calls=self.state.function_calls,
-                tool_calls=self.state.tool_calls
-            ),
+            output,
             self.state.state_changes
         )
     
@@ -532,13 +541,17 @@ def stream_generate(
     max_tokens: int = 4096,
     stop: Optional[List[str]] = None,
     verbose: bool = False,
-) -> Generator[LLMOutput, None, None]:
+    output_cls: type[BaseLLMOutput] = LLMOutput,
+) -> Generator[BaseLLMOutput, None, None]:
     """Stream generate from LLaMA.cpp model with timing and usage tracking."""
     
     # Create queues for communication between threads
     response_queue = Queue()
     error_queue = Queue()
     keep_alive_queue = Queue()
+    
+    # Set the output class for the transformer
+    transformer.output_cls = output_cls
     
     def _generate_worker():
         """Worker thread to run the model generation."""
