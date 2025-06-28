@@ -136,7 +136,7 @@ class ToolCallsMixin(BaseModel):
     )
 
 # Example of how to use:
-class LLMOutput(BaseLLMOutput, LLMUsageMixin):
+class LLMOutput(LLMUsageMixin, BaseLLMOutput):
     """Default LLM output model with token usage tracking."""
     pass
 
