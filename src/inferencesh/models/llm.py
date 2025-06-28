@@ -9,7 +9,6 @@ import base64
 
 from .base import BaseAppInput, BaseAppOutput
 from .file import File
-from .types import ContextMessage
 
 class ContextMessageRole(str, Enum):
     USER = "user"
@@ -535,34 +534,102 @@ def stream_generate(
     verbose: bool = False,
 ) -> Generator[LLMOutput, None, None]:
     """Stream generate from LLaMA.cpp model with timing and usage tracking."""
-    with timing_context() as timing:
-        transformer.timing = timing
-        
-        # Build completion kwargs
-        completion_kwargs = {
-            "messages": messages,
-            "stream": True,
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": max_tokens,
-            "stop": stop
-        }
-        if tools is not None:
-            completion_kwargs["tools"] = tools
-        if tool_choice is not None:
-            completion_kwargs["tool_choice"] = tool_choice
-        
-        # Initialize response state
-        response = StreamResponse()
-        buffer = ""
-        
+    
+    # Create queues for communication between threads
+    response_queue = Queue()
+    error_queue = Queue()
+    keep_alive_queue = Queue()
+    
+    def _generate_worker():
+        """Worker thread to run the model generation."""
         try:
+            # Build completion kwargs
+            completion_kwargs = {
+                "messages": messages,
+                "stream": True,
+                "temperature": temperature,
+                "top_p": top_p,
+                "max_tokens": max_tokens,
+                "stop": stop
+            }
+            if tools is not None:
+                completion_kwargs["tools"] = tools
+            if tool_choice is not None:
+                completion_kwargs["tool_choice"] = tool_choice
+            
+            # Signal that we're starting
+            keep_alive_queue.put(("init", time.time()))
+            
             completion = model.create_chat_completion(**completion_kwargs)
             
             for chunk in completion:
                 if verbose:
                     print(chunk)
-                # Mark first token time as soon as we get any response
+                response_queue.put(("chunk", chunk))
+                # Update keep-alive timestamp
+                keep_alive_queue.put(("alive", time.time()))
+                
+            # Signal completion
+            response_queue.put(("done", None))
+            
+        except Exception as e:
+            error_queue.put(e)
+            response_queue.put(("error", str(e)))
+    
+    with timing_context() as timing:
+        transformer.timing = timing
+        
+        # Start generation thread
+        generation_thread = Thread(target=_generate_worker, daemon=True)
+        generation_thread.start()
+        
+        # Initialize response state
+        response = StreamResponse()
+        buffer = ""
+        
+        # Keep-alive tracking
+        last_activity = time.time()
+        init_timeout = 30.0  # 30 seconds for initial response
+        chunk_timeout = 10.0  # 10 seconds between chunks
+        
+        try:
+            # Wait for initial setup
+            try:
+                msg_type, timestamp = keep_alive_queue.get(timeout=init_timeout)
+                if msg_type != "init":
+                    raise RuntimeError("Unexpected initialization message")
+                last_activity = timestamp
+            except Queue.Empty:
+                raise RuntimeError(f"Model failed to initialize within {init_timeout} seconds")
+            
+            while True:
+                # Check for errors
+                if not error_queue.empty():
+                    raise error_queue.get()
+                
+                # Check keep-alive
+                while not keep_alive_queue.empty():
+                    _, timestamp = keep_alive_queue.get_nowait()
+                    last_activity = timestamp
+                
+                # Check for timeout
+                if time.time() - last_activity > chunk_timeout:
+                    raise RuntimeError(f"No response from model for {chunk_timeout} seconds")
+                
+                # Get next chunk
+                try:
+                    msg_type, data = response_queue.get(timeout=0.1)
+                except Queue.Empty:
+                    continue
+                
+                if msg_type == "error":
+                    raise RuntimeError(f"Generation error: {data}")
+                elif msg_type == "done":
+                    break
+                
+                chunk = data
+                
+                # Mark first token time
                 if not timing.first_token_time:
                     timing.mark_first_token()
                 
@@ -577,6 +644,13 @@ def stream_generate(
                 # Break if we're done
                 if response.finish_reason:
                     break
+            
+            # Wait for generation thread to finish
+            generation_thread.join(timeout=5.0)  # Increased timeout to 5 seconds
+            if generation_thread.is_alive():
+                # Thread didn't finish - this shouldn't happen normally
+                # but we handle it gracefully
+                raise RuntimeError("Generation thread failed to finish")
                     
         except Exception as e:
             # Ensure any error is properly propagated
