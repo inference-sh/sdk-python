@@ -1,6 +1,6 @@
 from typing import Optional, List, Any, Callable, Dict, Generator
 from enum import Enum
-from pydantic import Field
+from pydantic import Field, BaseModel
 from queue import Queue
 from threading import Thread
 import time
@@ -9,6 +9,7 @@ import base64
 
 from .base import BaseAppInput, BaseAppOutput
 from .file import File
+from .types import ContextMessage
 
 class ContextMessageRole(str, Enum):
     USER = "user"
@@ -33,7 +34,8 @@ class ContextMessage(BaseAppInput):
         default=None
     )
 
-class LLMInput(BaseAppInput):
+class BaseLLMInput(BaseAppInput):
+    """Base class with common LLM fields."""
     system_prompt: str = Field(
         description="The system prompt to use for the model",
         default="You are a helpful assistant that can answer questions and help with tasks.",
@@ -47,25 +49,13 @@ class LLMInput(BaseAppInput):
     )
     context: List[ContextMessage] = Field(
         description="The context to use for the model",
+        default=[],
         examples=[
             [
-                {"role": "user", "content": [{"type": "text", "text": "What is the capital of France?"}]}, 
+                {"role": "user", "content": [{"type": "text", "text": "What is the capital of France?"}]},
                 {"role": "assistant", "content": [{"type": "text", "text": "The capital of France is Paris."}]}
-            ],
-            [
-                {"role": "user", "content": [{"type": "text", "text": "What is the weather like today?"}]}, 
-                {"role": "assistant", "content": [{"type": "text", "text": "I apologize, but I don't have access to real-time weather information. You would need to check a weather service or app to get current weather conditions for your location."}]}
-            ],
-            [
-                {"role": "user", "content": [{"type": "text", "text": "Can you help me write a poem about spring?"}]}, 
-                {"role": "assistant", "content": [{"type": "text", "text": "Here's a short poem about spring:\n\nGreen buds awakening,\nSoft rain gently falling down,\nNew life springs anew.\n\nWarm sun breaks through clouds,\nBirds return with joyful song,\nNature's sweet rebirth."}]}
-            ],
-            [
-                {"role": "user", "content": [{"type": "text", "text": "Explain quantum computing in simple terms"}]}, 
-                {"role": "assistant", "content": [{"type": "text", "text": "Quantum computing is like having a super-powerful calculator that can solve many problems at once instead of one at a time. While regular computers use bits (0s and 1s), quantum computers use quantum bits or \"qubits\" that can be both 0 and 1 at the same time - kind of like being in two places at once! This allows them to process huge amounts of information much faster than regular computers for certain types of problems."}]}
             ]
-        ],
-        default=[]
+        ]
     )
     text: str = Field(
         description="The user prompt to use for the model",
@@ -74,22 +64,41 @@ class LLMInput(BaseAppInput):
             "What is the weather like today?",
             "Can you help me write a poem about spring?",
             "Explain quantum computing in simple terms"
-        ],
+        ]
     )
-    image: Optional[File] = Field(
-        description="The image to use for the model",
-        default=None
-    )
-    # Optional parameters
     temperature: float = Field(default=0.7)
     top_p: float = Field(default=0.95)
     max_tokens: int = Field(default=4096)
     context_size: int = Field(default=4096)
-    
-    # Model specific flags
-    reasoning: Optional[bool] = Field(default=None)
-    
-    tools: Optional[List[Dict[str, Any]]] = Field(default=None)
+
+class ImageCapabilityMixin(BaseModel):
+    """Mixin for models that support image inputs."""
+    image: Optional[File] = Field(
+        description="The image to use for the model",
+        default=None
+    )
+
+class ReasoningCapabilityMixin(BaseModel):
+    """Mixin for models that support reasoning."""
+    reasoning: bool = Field(
+        description="Enable step-by-step reasoning",
+        default=False
+    )
+
+class ToolsCapabilityMixin(BaseModel):
+    """Mixin for models that support tool/function calling."""
+    tools: Optional[List[Dict[str, Any]]] = Field(
+        description="Tool definitions for function calling",
+        default=None
+    )
+
+# Example of how to use:
+class LLMInput(BaseLLMInput):
+    """Default LLM input model with no special capabilities."""
+    pass
+
+# For backward compatibility
+LLMInput.model_config["title"] = "LLMInput"
 
 class LLMUsage(BaseAppOutput):
     stop_reason: str = ""
@@ -102,12 +111,24 @@ class LLMUsage(BaseAppOutput):
     reasoning_time: float = 0.0
 
 
-class LLMOutput(BaseAppOutput):
-    response: str
-    reasoning: Optional[str] = None
-    tool_calls: Optional[List[Dict[str, Any]]] = None
-    usage: Optional[LLMUsage] = None
+class BaseLLMOutput(BaseAppOutput):
+    """Base class for LLM outputs with common fields."""
+    text: str = Field(description="The generated text response")
+    done: bool = Field(default=False, description="Whether this is the final chunk")
 
+class LLMUsageMixin(BaseModel):
+    """Mixin for models that provide token usage statistics."""
+    usage: Optional[LLMUsage] = Field(
+        description="Token usage statistics"
+    )
+
+# Example of how to use:
+class LLMOutput(BaseLLMOutput, LLMUsageMixin):
+    """Default LLM output model with token usage tracking."""
+    pass
+
+# For backward compatibility
+LLMOutput.model_config["title"] = "LLMOutput"
 
 @contextmanager
 def timing_context():
