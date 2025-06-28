@@ -1,7 +1,7 @@
 from typing import Optional, List, Any, Callable, Dict, Generator
 from enum import Enum
 from pydantic import Field, BaseModel
-from queue import Queue
+from queue import Queue, Empty
 from threading import Thread
 import time
 from contextlib import contextmanager
@@ -599,7 +599,7 @@ def stream_generate(
                 if msg_type != "init":
                     raise RuntimeError("Unexpected initialization message")
                 last_activity = timestamp
-            except Queue.Empty:
+            except Empty:
                 raise RuntimeError(f"Model failed to initialize within {init_timeout} seconds")
             
             while True:
@@ -619,7 +619,7 @@ def stream_generate(
                 # Get next chunk
                 try:
                     msg_type, data = response_queue.get(timeout=0.1)
-                except Queue.Empty:
+                except Empty:
                     continue
                 
                 if msg_type == "error":
