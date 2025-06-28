@@ -87,9 +87,9 @@ class LLMInput(BaseAppInput):
     context_size: int = Field(default=4096)
     
     # Model specific flags
-    reasoning: bool = Field(default=False)
+    reasoning: Optional[bool] = Field(default=None)
     
-    tools: List[Dict[str, Any]] = Field(default=[])
+    tools: Optional[List[Dict[str, Any]]] = Field(default=None)
 
 class LLMUsage(BaseAppOutput):
     stop_reason: str = ""
