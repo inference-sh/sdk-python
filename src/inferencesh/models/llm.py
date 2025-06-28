@@ -112,8 +112,7 @@ class LLMUsage(BaseAppOutput):
 
 class BaseLLMOutput(BaseAppOutput):
     """Base class for LLM outputs with common fields."""
-    text: str = Field(description="The generated text response")
-    done: bool = Field(default=False, description="Whether this is the final chunk")
+    response: str = Field(description="The generated text response")
 
 class LLMUsageMixin(BaseModel):
     """Mixin for models that provide token usage statistics."""
@@ -344,15 +343,10 @@ class StreamResponse:
     
     def to_output(self, buffer: str, transformer: Any) -> tuple[BaseLLMOutput, str]:
         """Convert current state to LLMOutput."""        
-        buffer, output, _ = transformer(self.content, buffer)
-        
-        # Add tool calls if present and supported
-        if self.tool_calls and hasattr(output, 'tool_calls'):
-            output.tool_calls = self.tool_calls
-            
-        # Add usage stats if supported
-        if hasattr(output, 'usage'):
-            output.usage = LLMUsage(
+        # Create usage object if we have stats
+        usage = None
+        if any(self.usage_stats.values()):
+            usage = LLMUsage(
                 stop_reason=self.usage_stats["stop_reason"],
                 time_to_first_token=self.timing_stats["time_to_first_token"] or 0.0,
                 tokens_per_second=self.timing_stats["tokens_per_second"],
@@ -362,6 +356,12 @@ class StreamResponse:
                 reasoning_time=self.timing_stats["reasoning_time"],
                 reasoning_tokens=self.timing_stats["reasoning_tokens"]
             )
+        
+        buffer, output, _ = transformer(self.content, buffer, usage)
+        
+        # Add tool calls if present and supported
+        if self.tool_calls and hasattr(output, 'tool_calls'):
+            output.tool_calls = self.tool_calls
             
         return output, buffer
 
@@ -374,6 +374,7 @@ class ResponseState:
         self.function_calls = None  # For future function calling support
         self.tool_calls = None      # List to accumulate tool calls
         self.current_tool_call = None  # Track current tool call being built
+        self.usage = None  # Add usage field
         self.state_changes = {
             "reasoning_started": False,
             "reasoning_ended": False,
@@ -496,18 +497,22 @@ class ResponseTransformer:
         Returns:
             Tuple of (buffer, LLMOutput, state_changes)
         """
-        output = self.output_cls(
-            response=self.state.response.strip(),
-            text=self.state.response.strip()  # text is required by BaseLLMOutput
-        )
+        # Build base output with required fields
+        output_data = {
+            "response": self.state.response.strip(),
+        }
         
-        # Add optional fields if supported
-        if hasattr(output, 'reasoning') and self.state.reasoning:
-            output.reasoning = self.state.reasoning.strip()
-        if hasattr(output, 'function_calls') and self.state.function_calls:
-            output.function_calls = self.state.function_calls
-        if hasattr(output, 'tool_calls') and self.state.tool_calls:
-            output.tool_calls = self.state.tool_calls
+        # Add optional fields if they exist
+        if self.state.usage is not None:
+            output_data["usage"] = self.state.usage
+        if self.state.reasoning:
+            output_data["reasoning"] = self.state.reasoning.strip()
+        if self.state.function_calls:
+            output_data["function_calls"] = self.state.function_calls
+        if self.state.tool_calls:
+            output_data["tool_calls"] = self.state.tool_calls
+            
+        output = self.output_cls(**output_data)
             
         return (
             self.state.buffer,
@@ -515,17 +520,20 @@ class ResponseTransformer:
             self.state.state_changes
         )
     
-    def __call__(self, piece: str, buffer: str) -> tuple[str, LLMOutput, dict]:
+    def __call__(self, piece: str, buffer: str, usage: Optional[LLMUsage] = None) -> tuple[str, LLMOutput, dict]:
         """Transform a piece of text and return the result.
         
         Args:
             piece: New piece of text to transform
             buffer: Existing buffer content
+            usage: Optional usage statistics
             
         Returns:
             Tuple of (new_buffer, output, state_changes)
         """
         self.state.buffer = buffer
+        if usage is not None:
+            self.state.usage = usage
         self.transform_chunk(piece)
         return self.build_output()
 
