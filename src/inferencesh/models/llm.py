@@ -121,6 +121,20 @@ class LLMUsageMixin(BaseModel):
         default=None
     )
 
+class ReasoningMixin(BaseModel):
+    """Mixin for models that support reasoning."""
+    reasoning: Optional[str] = Field(
+        description="The reasoning output of the model",
+        default=None
+    )
+
+class ToolCallsMixin(BaseModel):
+    """Mixin for models that support tool calls."""
+    tool_calls: Optional[List[Dict[str, Any]]] = Field(
+        description="Tool calls for function calling",
+        default=None
+    )
+
 # Example of how to use:
 class LLMOutput(BaseLLMOutput, LLMUsageMixin):
     """Default LLM output model with token usage tracking."""
