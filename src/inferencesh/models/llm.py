@@ -238,8 +238,13 @@ def build_messages(
         image = images[0] if images else None # TODO: handle multiple images
         return ContextMessage(role=messages[0].role, text=text, image=image)
 
+    user_msg = ContextMessage(role=ContextMessageRole.USER, text=input_data.text, image=input_data.image)
+
+    input_data.context.append(user_msg)
+
     current_role = None
     current_messages = []
+    
     for msg in input_data.context:
         if msg.role == current_role or current_role is None:
             current_messages.append(msg)
@@ -256,12 +261,6 @@ def build_messages(
             "role": current_role,
             "content": render_message(merge_messages(current_messages), allow_multipart=multipart)
         })
-
-    user_msg = ContextMessage(role=ContextMessageRole.USER, text=input_data.text, image=input_data.image)
-    messages.append({
-        "role": "user",
-        "content": render_message(user_msg, allow_multipart=multipart)
-    })
 
     return messages
 
