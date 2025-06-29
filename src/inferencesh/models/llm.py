@@ -233,7 +233,7 @@ def build_messages(
     messages = [{"role": "system", "content": input_data.system_prompt}] if input_data.system_prompt is not None and input_data.system_prompt != "" else []
 
     def merge_messages(messages: List[ContextMessage]) -> ContextMessage:
-        text = " ".join(msg.text for msg in messages if msg.text)
+        text = "\n\n".join(msg.text for msg in messages if msg.text)
         images = [msg.image for msg in messages if msg.image]
         image = images[0] if images else None # TODO: handle multiple images
         return ContextMessage(role=messages[0].role, text=text, image=image)
@@ -585,9 +585,7 @@ def stream_generate(
     output_cls: type[BaseLLMOutput] = LLMOutput,
 ) -> Generator[BaseLLMOutput, None, None]:
     """Stream generate from LLaMA.cpp model with timing and usage tracking."""
-    
-    print("[DEBUG] Starting stream_generate")
-    
+        
     # Create queues for communication between threads
     response_queue = Queue()
     error_queue = Queue()
@@ -599,7 +597,6 @@ def stream_generate(
     def _generate_worker():
         """Worker thread to run the model generation."""
         try:
-            print("[DEBUG] Worker thread started")
             # Build completion kwargs
             completion_kwargs = {
                 "messages": messages,
@@ -616,28 +613,18 @@ def stream_generate(
             
             # Signal that we're starting
             keep_alive_queue.put(("init", time.time()))
-            print("[DEBUG] Worker sent init signal")
             
             completion = model.create_chat_completion(**completion_kwargs)
-            print("[DEBUG] Got completion iterator from model")
             
-            chunk_count = 0
             for chunk in completion:
-                chunk_count += 1
-                if verbose:
-                    print(chunk)
-                if chunk_count % 10 == 0:  # Log every 10th chunk to avoid spam
-                    print(f"[DEBUG] Processing chunk {chunk_count}")
                 response_queue.put(("chunk", chunk))
                 # Update keep-alive timestamp
                 keep_alive_queue.put(("alive", time.time()))
                 
             # Signal completion
-            print(f"[DEBUG] Worker finished processing {chunk_count} chunks")
             response_queue.put(("done", None))
             
         except Exception as e:
-            print(f"[DEBUG] Worker thread caught exception: {type(e).__name__}: {str(e)}")
             # Preserve the full exception with traceback
             import sys
             error_queue.put((e, sys.exc_info()[2]))
@@ -649,7 +636,6 @@ def stream_generate(
         # Start generation thread
         generation_thread = Thread(target=_generate_worker, daemon=True)
         generation_thread.start()
-        print("[DEBUG] Started worker thread")
         
         # Initialize response state
         response = StreamResponse()
@@ -665,25 +651,18 @@ def stream_generate(
             try:
                 msg_type, timestamp = keep_alive_queue.get(timeout=init_timeout)
                 if msg_type != "init":
-                    print(f"[DEBUG] Raising due to unexpected init message: {msg_type}")
                     raise RuntimeError("Unexpected initialization message")
                 last_activity = timestamp
-                print("[DEBUG] Received init signal from worker")
             except Empty:
-                print(f"[DEBUG] Raising due to init timeout after {init_timeout}s")
                 raise RuntimeError(f"Model failed to initialize within {init_timeout} seconds")
             
-            chunk_count = 0
-            output_count = 0
             while True:
                 # Check for errors - now with proper exception chaining
                 if not error_queue.empty():
                     exc, tb = error_queue.get()
                     if isinstance(exc, Exception):
-                        print(f"[DEBUG] Raising worker thread exception: {type(exc).__name__}: {str(exc)}")
                         raise exc.with_traceback(tb)
                     else:
-                        print(f"[DEBUG] Raising unknown worker thread error: {exc}")
                         raise RuntimeError(f"Unknown error in worker thread: {exc}")
                 
                 # Check keep-alive
@@ -697,76 +676,54 @@ def stream_generate(
                 
                 # Check for timeout
                 if time.time() - last_activity > chunk_timeout:
-                    print(f"[DEBUG] Raising due to chunk timeout after {chunk_timeout}s")
                     raise RuntimeError(f"No response from model for {chunk_timeout} seconds")
                 
                 # Get next chunk
                 try:
                     msg_type, data = response_queue.get(timeout=0.1)
-                    chunk_count += 1
-                    if chunk_count % 10 == 0:  # Log every 10th chunk to avoid spam
-                        print(f"[DEBUG] Main loop received chunk {chunk_count} chunk sample: {data}")
                 except Empty:
                     continue
                 
                 if msg_type == "error":
                     # If we get an error message but no exception in error_queue,
                     # create a new error
-                    print(f"[DEBUG] Raising due to error message: {data}")
                     raise RuntimeError(f"Generation error: {data}")
                 elif msg_type == "done":
-                    print("[DEBUG] Received done signal from worker")
                     break
                 
                 chunk = data
                 
+                if verbose:
+                    print(chunk)
+                
                 # Mark first token time
                 if not timing.first_token_time:
                     timing.mark_first_token()
-                    print("[DEBUG] Marked first token time")
                 
                 # Update response state from chunk
                 response.update_from_chunk(chunk, timing)
                 
                 # Yield output if we have updates
                 if response.has_updates():
-                    output_count += 1
-                    if output_count % 10 == 0:  # Log every 10th output to avoid spam
-                        print(f"[DEBUG] Yielding output {output_count}")
-                        if hasattr(response, 'usage_stats'):
-                            print(f"[DEBUG] Current usage stats: {response.usage_stats}")
                     output, buffer = response.to_output(buffer, transformer)
                     yield output
                 
                 # Break if we're done
                 if response.finish_reason:
-                    print(f"[DEBUG] Breaking loop due to finish_reason: {response.finish_reason}")
                     break
-            
-            print(f"[DEBUG] Main loop finished. Processed {chunk_count} chunks, yielded {output_count} outputs")
-            if hasattr(response, 'usage_stats'):
-                print(f"[DEBUG] Final usage stats: {response.usage_stats}")
             
             # Wait for generation thread to finish
             if generation_thread.is_alive():
-                print("[DEBUG] Waiting for worker thread to finish")
                 generation_thread.join(timeout=5.0)  # Increased timeout to 5 seconds
                 if generation_thread.is_alive():
                     # Thread didn't finish - this shouldn't happen normally
-                    print("[DEBUG] Raising due to thread not finishing after 5s timeout")
                     raise RuntimeError("Generation thread failed to finish")
-                else:
-                    print("[DEBUG] Worker thread finished successfully")
                     
         except Exception as e:
             # Check if there's a thread error we should chain with
             if not error_queue.empty():
                 thread_exc, thread_tb = error_queue.get()
                 if isinstance(thread_exc, Exception):
-                    print(f"[DEBUG] Chaining main exception with worker thread exception:")
-                    print(f"[DEBUG] Main exception: {type(e).__name__}: {str(e)}")
-                    print(f"[DEBUG] Worker exception: {type(thread_exc).__name__}: {str(thread_exc)}")
                     raise e from thread_exc
             # If no thread error, raise the original exception
-            print(f"[DEBUG] Raising main thread exception: {type(e).__name__}: {str(e)}")
             raise 
