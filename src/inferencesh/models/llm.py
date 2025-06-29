@@ -627,6 +627,7 @@ def stream_generate(
             response_queue.put(("done", None))
             
         except Exception as e:
+            print(f"[DEBUG] Worker thread caught exception: {type(e).__name__}: {str(e)}")
             # Preserve the full exception with traceback
             import sys
             error_queue.put((e, sys.exc_info()[2]))
@@ -653,9 +654,11 @@ def stream_generate(
             try:
                 msg_type, timestamp = keep_alive_queue.get(timeout=init_timeout)
                 if msg_type != "init":
+                    print(f"[DEBUG] Raising due to unexpected init message: {msg_type}")
                     raise RuntimeError("Unexpected initialization message")
                 last_activity = timestamp
             except Empty:
+                print(f"[DEBUG] Raising due to init timeout after {init_timeout}s")
                 raise RuntimeError(f"Model failed to initialize within {init_timeout} seconds")
             
             while True:
@@ -663,8 +666,10 @@ def stream_generate(
                 if not error_queue.empty():
                     exc, tb = error_queue.get()
                     if isinstance(exc, Exception):
+                        print(f"[DEBUG] Raising worker thread exception: {type(exc).__name__}: {str(exc)}")
                         raise exc.with_traceback(tb)
                     else:
+                        print(f"[DEBUG] Raising unknown worker thread error: {exc}")
                         raise RuntimeError(f"Unknown error in worker thread: {exc}")
                 
                 # Check keep-alive
@@ -678,6 +683,7 @@ def stream_generate(
                 
                 # Check for timeout
                 if time.time() - last_activity > chunk_timeout:
+                    print(f"[DEBUG] Raising due to chunk timeout after {chunk_timeout}s")
                     raise RuntimeError(f"No response from model for {chunk_timeout} seconds")
                 
                 # Get next chunk
@@ -689,6 +695,7 @@ def stream_generate(
                 if msg_type == "error":
                     # If we get an error message but no exception in error_queue,
                     # create a new error
+                    print(f"[DEBUG] Raising due to error message: {data}")
                     raise RuntimeError(f"Generation error: {data}")
                 elif msg_type == "done":
                     break
@@ -716,6 +723,7 @@ def stream_generate(
                 generation_thread.join(timeout=5.0)  # Increased timeout to 5 seconds
                 if generation_thread.is_alive():
                     # Thread didn't finish - this shouldn't happen normally
+                    print("[DEBUG] Raising due to thread not finishing after 5s timeout")
                     raise RuntimeError("Generation thread failed to finish")
                     
         except Exception as e:
@@ -723,6 +731,10 @@ def stream_generate(
             if not error_queue.empty():
                 thread_exc, thread_tb = error_queue.get()
                 if isinstance(thread_exc, Exception):
+                    print(f"[DEBUG] Chaining main exception with worker thread exception:")
+                    print(f"[DEBUG] Main exception: {type(e).__name__}: {str(e)}")
+                    print(f"[DEBUG] Worker exception: {type(thread_exc).__name__}: {str(thread_exc)}")
                     raise e from thread_exc
             # If no thread error, raise the original exception
+            print(f"[DEBUG] Raising main thread exception: {type(e).__name__}: {str(e)}")
             raise 
