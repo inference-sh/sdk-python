@@ -232,10 +232,29 @@ def build_messages(
     multipart = any(m.image for m in input_data.context) or input_data.image is not None
     messages = [{"role": "system", "content": input_data.system_prompt}] if input_data.system_prompt is not None and input_data.system_prompt != "" else []
 
+    def merge_messages(messages: List[ContextMessage]) -> ContextMessage:
+        text = "\n\n".join(msg.text for msg in messages if msg.text)
+        images = [msg.image for msg in messages if msg.image]
+        image = images[0] if images else None # TODO: handle multiple images
+        return ContextMessage(role=messages[0].role, text=text, image=image)
+
+    current_role = None
+    current_messages = []
     for msg in input_data.context:
+        if msg.role == current_role or current_role is None:
+            current_messages.append(msg)
+            current_role = msg.role
+        else:
+            messages.append({
+                "role": current_role,
+                "content": render_message(merge_messages(current_messages), allow_multipart=multipart)
+            })
+            current_messages = [msg]
+            current_role = msg.role
+    if len(current_messages) > 0:
         messages.append({
-            "role": msg.role,
-            "content": render_message(msg, allow_multipart=multipart)
+            "role": current_role,
+            "content": render_message(merge_messages(current_messages), allow_multipart=multipart)
         })
 
     user_msg = ContextMessage(role=ContextMessageRole.USER, text=input_data.text, image=input_data.image)
