@@ -233,7 +233,7 @@ def build_messages(
     messages = [{"role": "system", "content": input_data.system_prompt}] if input_data.system_prompt is not None and input_data.system_prompt != "" else []
 
     def merge_messages(messages: List[ContextMessage]) -> ContextMessage:
-        text = "\n\n".join(msg.text for msg in messages if msg.text)
+        text = " ".join(msg.text for msg in messages if msg.text)
         images = [msg.image for msg in messages if msg.image]
         image = images[0] if images else None # TODO: handle multiple images
         return ContextMessage(role=messages[0].role, text=text, image=image)
