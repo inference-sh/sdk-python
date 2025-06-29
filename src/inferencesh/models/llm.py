@@ -705,7 +705,7 @@ def stream_generate(
                     msg_type, data = response_queue.get(timeout=0.1)
                     chunk_count += 1
                     if chunk_count % 10 == 0:  # Log every 10th chunk to avoid spam
-                        print(f"[DEBUG] Main loop received chunk {chunk_count}")
+                        print(f"[DEBUG] Main loop received chunk {chunk_count} chunk sample: {data}")
                 except Empty:
                     continue
                 
