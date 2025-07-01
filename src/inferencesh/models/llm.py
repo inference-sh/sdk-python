@@ -229,7 +229,6 @@ def build_messages(
             return parts[0]["text"]
         raise ValueError("Image content requires multipart support")
 
-    multipart = any(m.image for m in input_data.context) or input_data.image is not None
     messages = [{"role": "system", "content": input_data.system_prompt}] if input_data.system_prompt is not None and input_data.system_prompt != "" else []
 
     def merge_messages(messages: List[ContextMessage]) -> ContextMessage:
@@ -241,9 +240,13 @@ def build_messages(
     user_input_text = ""
     if hasattr(input_data, "text"):
         user_input_text = transform_user_message(input_data.text) if transform_user_message else input_data.text
+        
     user_input_image = None
+    multipart = any(m.image for m in input_data.context)
     if hasattr(input_data, "image"):
         user_input_image = input_data.image
+        multipart = multipart or input_data.image is not None
+
     user_msg = ContextMessage(role=ContextMessageRole.USER, text=user_input_text, image=user_input_image)
 
     input_data.context.append(user_msg)
