@@ -238,7 +238,13 @@ def build_messages(
         image = images[0] if images else None # TODO: handle multiple images
         return ContextMessage(role=messages[0].role, text=text, image=image)
 
-    user_msg = ContextMessage(role=ContextMessageRole.USER, text=input_data.text, image=input_data.image)
+    user_input_text = ""
+    if hasattr(input_data, "text"):
+        user_input_text = transform_user_message(input_data.text) if transform_user_message else input_data.text
+    user_input_image = None
+    if hasattr(input_data, "image"):
+        user_input_image = input_data.image
+    user_msg = ContextMessage(role=ContextMessageRole.USER, text=user_input_text, image=user_input_image)
 
     input_data.context.append(user_msg)
 
