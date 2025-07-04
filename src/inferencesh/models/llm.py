@@ -65,9 +65,8 @@ class BaseLLMInput(BaseAppInput):
             "Explain quantum computing in simple terms"
         ]
     )
-    temperature: float = Field(default=0.7)
-    top_p: float = Field(default=0.95)
-    max_tokens: int = Field(default=4096)
+    temperature: float = Field(default=0.7, ge=0.0, le=1.0)
+    top_p: float = Field(default=0.95, ge=0.0, le=1.0)
     context_size: int = Field(default=4096)
 
 class ImageCapabilityMixin(BaseModel):
@@ -588,7 +587,6 @@ def stream_generate(
     tool_choice: Optional[Dict[str, Any]] = None,
     temperature: float = 0.7,
     top_p: float = 0.95,
-    max_tokens: int = 4096,
     stop: Optional[List[str]] = None,
     verbose: bool = False,
     output_cls: type[BaseLLMOutput] = LLMOutput,
@@ -612,7 +610,6 @@ def stream_generate(
                 "stream": True,
                 "temperature": temperature,
                 "top_p": top_p,
-                "max_tokens": max_tokens,
                 "stop": stop
             }
             if tools is not None:
