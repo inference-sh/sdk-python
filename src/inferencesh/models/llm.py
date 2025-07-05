@@ -67,8 +67,7 @@ class ImageCapabilityMixin(BaseModel):
     image: Optional[File] = Field(
         description="the image to use for the model",
         default=None,
-        content_type=["image/*"],
-        max_size_mb=10
+        content_media_type=["image/*"],
     )
 
 class ReasoningCapabilityMixin(BaseModel):
