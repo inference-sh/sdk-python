@@ -23,31 +23,27 @@ class Message(BaseAppInput):
 
 class ContextMessage(BaseAppInput):
     role: ContextMessageRole = Field(
-        description="The role of the message",
+        description="the role of the message. user, assistant, or system",
     )
     text: str = Field(
-        description="The text content of the message"
+        description="the text content of the message"
     )
     image: Optional[File] = Field(
-        description="The image url of the message",
+        description="the image file of the message",
         default=None
     )
 
 class BaseLLMInput(BaseAppInput):
     """Base class with common LLM fields."""
     system_prompt: str = Field(
-        description="The system prompt to use for the model",
-        default="You are a helpful assistant that can answer questions and help with tasks.",
+        description="the system prompt to use for the model",
+        default="you are a helpful assistant that can answer questions and help with tasks.",
         examples=[
-            "You are a helpful assistant that can answer questions and help with tasks.",
-            "You are a certified medical professional who can provide accurate health information.",
-            "You are a certified financial advisor who can give sound investment guidance.",
-            "You are a certified cybersecurity expert who can explain security best practices.",
-            "You are a certified environmental scientist who can discuss climate and sustainability.",
+            "you are a helpful assistant that can answer questions and help with tasks.",
         ]
     )
     context: List[ContextMessage] = Field(
-        description="The context to use for the model",
+        description="the context to use for the model",
         default=[],
         examples=[
             [
@@ -57,12 +53,9 @@ class BaseLLMInput(BaseAppInput):
         ]
     )
     text: str = Field(
-        description="The user prompt to use for the model",
+        description="the user prompt to use for the model",
         examples=[
-            "What is the capital of France?",
-            "What is the weather like today?",
-            "Can you help me write a poem about spring?",
-            "Explain quantum computing in simple terms"
+            "write a haiku about artificial general intelligence"
         ]
     )
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -72,21 +65,23 @@ class BaseLLMInput(BaseAppInput):
 class ImageCapabilityMixin(BaseModel):
     """Mixin for models that support image inputs."""
     image: Optional[File] = Field(
-        description="The image to use for the model",
-        default=None
+        description="the image to use for the model",
+        default=None,
+        content_type=["image/*"],
+        max_size_mb=10
     )
 
 class ReasoningCapabilityMixin(BaseModel):
     """Mixin for models that support reasoning."""
     reasoning: bool = Field(
-        description="Enable step-by-step reasoning",
+        description="enable step-by-step reasoning",
         default=False
     )
 
 class ToolsCapabilityMixin(BaseModel):
     """Mixin for models that support tool/function calling."""
     tools: Optional[List[Dict[str, Any]]] = Field(
-        description="Tool definitions for function calling",
+        description="tool definitions for function calling",
         default=None
     )
 
@@ -111,26 +106,26 @@ class LLMUsage(BaseAppOutput):
 
 class BaseLLMOutput(BaseAppOutput):
     """Base class for LLM outputs with common fields."""
-    response: str = Field(description="The generated text response")
+    response: str = Field(description="the generated text response")
 
 class LLMUsageMixin(BaseModel):
     """Mixin for models that provide token usage statistics."""
     usage: Optional[LLMUsage] = Field(
-        description="Token usage statistics",
+        description="token usage statistics",
         default=None
     )
 
 class ReasoningMixin(BaseModel):
     """Mixin for models that support reasoning."""
     reasoning: Optional[str] = Field(
-        description="The reasoning output of the model",
+        description="the reasoning output of the model",
         default=None
     )
 
 class ToolCallsMixin(BaseModel):
     """Mixin for models that support tool calls."""
     tool_calls: Optional[List[Dict[str, Any]]] = Field(
-        description="Tool calls for function calling",
+        description="tool calls for function calling",
         default=None
     )
 
