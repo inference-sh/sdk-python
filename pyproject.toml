@@ -19,6 +19,8 @@ classifiers = [
 dependencies = [
     "pydantic>=2.0.0",
     "tqdm>=4.67.0",
+    # Required for the synchronous client and examples
+    "requests>=2.31.0",
 ]
 
 [project.urls]
@@ -41,4 +43,8 @@ exclude = [".git", "__pycache__", "build", "dist"]
 test = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+]
+async = [
+    "aiohttp>=3.9.0; python_version >= '3.8'",
+    "aiofiles>=23.2.1; python_version >= '3.8'",
 ]

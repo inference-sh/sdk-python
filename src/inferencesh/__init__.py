@@ -17,6 +17,7 @@ from .models import (
     timing_context,
 )
 from .utils import StorageDir, download
+from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
 
 __all__ = [
     "BaseApp",
@@ -33,4 +34,8 @@ __all__ = [
     "timing_context",
     "StorageDir",
     "download",
+    "Inference",
+    "AsyncInference",
+    "UploadFileOptions",
+    "TaskStatus",
 ]
