@@ -5,11 +5,45 @@ import os
 import urllib.request
 import urllib.parse
 import tempfile
+import hashlib
+from pathlib import Path
 from tqdm import tqdm
 
 
 class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
+    
+    @classmethod
+    def get_cache_dir(cls) -> Path:
+        """Get the cache directory path based on environment variables or default location."""
+        if cache_dir := os.environ.get("FILE_CACHE_DIR"):
+            path = Path(cache_dir)
+        else:
+            path = Path.home() / ".cache" / "inferencesh" / "files"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    
+    def _get_cache_path(self, url: str) -> Path:
+        """Get the cache path for a URL using a hash-based directory structure."""
+        # Parse URL components
+        parsed_url = urllib.parse.urlparse(url)
+        
+        # Create hash from URL path and query parameters for uniqueness
+        url_components = parsed_url.netloc + parsed_url.path
+        if parsed_url.query:
+            url_components += '?' + parsed_url.query
+        url_hash = hashlib.sha256(url_components.encode()).hexdigest()[:12]
+        
+        # Get filename from URL or use default
+        filename = os.path.basename(parsed_url.path)
+        if not filename:
+            filename = 'download'
+            
+        # Create hash directory in cache
+        cache_dir = self.get_cache_dir() / url_hash
+        cache_dir.mkdir(exist_ok=True)
+        
+        return cache_dir / filename
     uri: Optional[str] = Field(default=None)  # Original location (URL or file path)
     path: Optional[str] = None  # Resolved local file path
     content_type: Optional[str] = None  # MIME type of the file
@@ -74,11 +108,20 @@ class File(BaseModel):
         return parsed.scheme in ('http', 'https')
 
     def _download_url(self) -> None:
-        """Download the URL to a temporary file and update the path."""
+        """Download the URL to the cache directory and update the path."""
         original_url = self.uri
+        cache_path = self._get_cache_path(original_url)
+        
+        # If file exists in cache, use it
+        if cache_path.exists():
+            print(f"Using cached file: {cache_path}")
+            self.path = str(cache_path)
+            return
+            
+        print(f"Downloading URL: {original_url} to {cache_path}")
         tmp_file = None
         try:
-            # Create a temporary file with a suffix based on the URL path
+            # Download to temporary file first to avoid partial downloads in cache
             suffix = os.path.splitext(urllib.parse.urlparse(original_url).path)[1]
             tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
             self._tmp_path = tmp_file.name
@@ -133,7 +176,10 @@ class File(BaseModel):
                                     # If we read the whole body at once, exit loop
                                     break
                             
-                self.path = self._tmp_path
+                # Move the temporary file to the cache location
+                os.replace(self._tmp_path, cache_path)
+                self._tmp_path = None  # Prevent deletion in __del__
+                self.path = str(cache_path)
             except (urllib.error.URLError, urllib.error.HTTPError) as e:
                 raise RuntimeError(f"Failed to download URL {original_url}: {str(e)}")
             except IOError as e:
