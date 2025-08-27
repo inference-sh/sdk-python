@@ -24,16 +24,24 @@ def download(url: str, directory: Union[str, Path, StorageDir]) -> str:
     dir_path = Path(directory)
     dir_path.mkdir(exist_ok=True)
     
-    # Create hash directory from URL
-    url_hash = hashlib.sha256(url.encode()).hexdigest()[:12]
+    # Parse URL components
+    parsed_url = urllib.parse.urlparse(url)
+    
+    # Create hash from URL path and query parameters for uniqueness
+    url_components = parsed_url.netloc + parsed_url.path
+    if parsed_url.query:
+        url_components += '?' + parsed_url.query
+    url_hash = hashlib.sha256(url_components.encode()).hexdigest()[:12]
+    
+    # Keep original filename or use a default
+    filename = os.path.basename(parsed_url.path)
+    if not filename:
+        filename = 'download'
+    
+    # Create hash directory and store file
     hash_dir = dir_path / url_hash
     hash_dir.mkdir(exist_ok=True)
     
-    # Keep original filename
-    filename = os.path.basename(urllib.parse.urlparse(url).path)
-    if not filename:
-        filename = 'download'
-        
     output_path = hash_dir / filename
     
     # If file exists in directory and it's not a temp directory, return it
