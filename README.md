@@ -11,47 +11,91 @@ pip install infsh
 ## client usage
 
 ```python
-from infsh import Inference, TaskStatus
+from inferencesh import Inference, TaskStatus
 
-# create client
+# Create client
 client = Inference(api_key="your-api-key")
 
-# simple usage - wait for result
-result = client.run({
-    "app": "your-app",
-    "input": {"key": "value"},
-    "variant": "default"
-})
-print(f"output: {result['output']}")
-
-# get task info without waiting
-task = client.run(params, wait=False)
-print(f"task id: {task['id']}")
-
-# stream updates (recommended)
-for update in client.run(params, stream=True):
-    status = update.get("status")
-    print(f"status: {TaskStatus(status).name}")
+# Simple synchronous usage
+try:
+    task = client.run({
+        "app": "your-app",
+        "input": {"key": "value"},
+        "infra": "cloud",
+        "variant": "default"
+    })
     
-    if status == TaskStatus.COMPLETED:
-        print(f"output: {update.get('output')}")
-        break
-    elif status == TaskStatus.FAILED:
-        print(f"error: {update.get('error')}")
-        break
+    print(f"Task ID: {task.get('id')}")
 
-# async support
+    if task.get("status") == TaskStatus.COMPLETED:
+        print("✓ Task completed successfully!")
+        print(f"Output: {task.get('output')}")
+    else:
+        status = task.get("status")
+        status_name = TaskStatus(status).name if status is not None else "UNKNOWN"
+        print(f"✗ Task did not complete. Final status: {status_name}")
+
+except Exception as exc:
+    print(f"Error: {type(exc).__name__}: {exc}")
+    raise  # Re-raise to see full traceback
+
+# Streaming updates (recommended)
+try:
+    for update in client.run(
+        {
+            "app": "your-app",
+            "input": {"key": "value"},
+            "infra": "cloud",
+            "variant": "default"
+        },
+        stream=True  # Enable streaming updates
+    ):
+        status = update.get("status")
+        status_name = TaskStatus(status).name if status is not None else "UNKNOWN"
+        print(f"Status: {status_name}")
+        
+        if status == TaskStatus.COMPLETED:
+            print("✓ Task completed!")
+            print(f"Output: {update.get('output')}")
+            break
+        elif status == TaskStatus.FAILED:
+            print(f"✗ Task failed: {update.get('error')}")
+            break
+        elif status == TaskStatus.CANCELLED:
+            print("✗ Task was cancelled")
+            break
+
+except Exception as exc:
+    print(f"Error: {type(exc).__name__}: {exc}")
+    raise  # Re-raise to see full traceback
+
+# Async support
 async def run_async():
-    from infsh import AsyncInference
+    from inferencesh import AsyncInference
     
     client = AsyncInference(api_key="your-api-key")
     
-    # simple usage
-    result = await client.run(params)
+    # Simple usage
+    result = await client.run({
+        "app": "your-app",
+        "input": {"key": "value"},
+        "infra": "cloud",
+        "variant": "default"
+    })
     
-    # stream updates
-    async for update in await client.run(params, stream=True):
-        print(f"status: {TaskStatus(update['status']).name}")
+    # Stream updates
+    async for update in await client.run(
+        {
+            "app": "your-app",
+            "input": {"key": "value"},
+            "infra": "cloud",
+            "variant": "default"
+        },
+        stream=True
+    ):
+        status = update.get("status")
+        status_name = TaskStatus(status).name if status is not None else "UNKNOWN"
+        print(f"Status: {status_name}")
 ```
 
 ## file handling
