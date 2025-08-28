@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Callable, Generator, Union
+from typing import Any, Dict, Optional, Callable, Generator, Union, Iterator
 from dataclasses import dataclass
 from enum import IntEnum
 import json
@@ -8,6 +8,103 @@ import re
 import time
 import mimetypes
 import os
+from contextlib import AbstractContextManager
+from typing import Protocol, runtime_checkable
+
+
+class TaskStream(AbstractContextManager['TaskStream']):
+    """A context manager for streaming task updates.
+    
+    This class provides a Pythonic interface for handling streaming updates from a task.
+    It can be used either as a context manager or as an iterator.
+    
+    Example:
+        ```python
+        # As a context manager
+        with client.stream_task(task_id) as stream:
+            for update in stream:
+                print(f"Update: {update}")
+                
+        # As an iterator
+        for update in client.stream_task(task_id):
+            print(f"Update: {update}")
+        ```
+    """
+    def __init__(
+        self,
+        task: Dict[str, Any],
+        client: Any,
+        auto_reconnect: bool = True,
+        max_reconnects: int = 5,
+        reconnect_delay_ms: int = 1000,
+    ):
+        self.task = task
+        self.client = client
+        self.task_id = task["id"]
+        self.auto_reconnect = auto_reconnect
+        self.max_reconnects = max_reconnects
+        self.reconnect_delay_ms = reconnect_delay_ms
+        self._final_task: Optional[Dict[str, Any]] = None
+        self._error: Optional[Exception] = None
+        
+    def __enter__(self) -> 'TaskStream':
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        pass
+        
+    def __iter__(self) -> Iterator[Dict[str, Any]]:
+        return self.stream()
+        
+    @property
+    def result(self) -> Optional[Dict[str, Any]]:
+        """The final task result if completed, None otherwise."""
+        return self._final_task
+        
+    @property
+    def error(self) -> Optional[Exception]:
+        """The error that occurred during streaming, if any."""
+        return self._error
+        
+    def stream(self) -> Iterator[Dict[str, Any]]:
+        """Stream updates for this task.
+        
+        Yields:
+            Dict[str, Any]: Task update events
+            
+        Raises:
+            RuntimeError: If the task fails or is cancelled
+        """
+        try:
+            for update in self.client._stream_updates(
+                self.task_id,
+                self.task,
+            ):
+                if isinstance(update, Exception):
+                    self._error = update
+                    raise update
+                if update.get("status") == TaskStatus.COMPLETED:
+                    self._final_task = update
+                yield update
+        except Exception as exc:
+            self._error = exc
+            raise
+
+
+@runtime_checkable
+class TaskCallback(Protocol):
+    """Protocol for task streaming callbacks."""
+    def on_update(self, data: Dict[str, Any]) -> None:
+        """Called when a task update is received."""
+        ...
+
+    def on_error(self, error: Exception) -> None:
+        """Called when an error occurs during task execution."""
+        ...
+
+    def on_complete(self, task: Dict[str, Any]) -> None:
+        """Called when a task completes successfully."""
+        ...
 
 
 # Deliberately do lazy imports for requests/aiohttp to avoid hard dependency at import time
@@ -228,121 +325,115 @@ class Inference:
         return payload.get("data")
 
     # --------------- Public API ---------------
-    def run(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        processed_input = self._process_input_data(params.get("input"))
-        task = self._request("post", "/run", data={**params, "input": processed_input})
-        return task
-
-    def run_sync(
+    def run(
         self,
         params: Dict[str, Any],
         *,
+        wait: bool = True,
+        stream: bool = False,
         auto_reconnect: bool = True,
         max_reconnects: int = 5,
         reconnect_delay_ms: int = 1000,
-    ) -> Dict[str, Any]:
+    ) -> Union[Dict[str, Any], TaskStream, Iterator[Dict[str, Any]]]:
+        """Run a task with optional streaming updates.
+        
+        By default, this method waits for the task to complete and returns the final result.
+        You can set wait=False to get just the task info, or stream=True to get an iterator
+        of status updates.
+        
+        Args:
+            params: Task parameters to pass to the API
+            wait: Whether to wait for task completion (default: True)
+            stream: Whether to return an iterator of updates (default: False)
+            auto_reconnect: Whether to automatically reconnect on connection loss
+            max_reconnects: Maximum number of reconnection attempts
+            reconnect_delay_ms: Delay between reconnection attempts in milliseconds
+            
+        Returns:
+            Union[Dict[str, Any], TaskStream, Iterator[Dict[str, Any]]]:
+                - If wait=True and stream=False: The completed task data
+                - If wait=False: The created task info
+                - If stream=True: An iterator of task updates
+            
+        Example:
+            ```python
+            # Simple usage - wait for result (default)
+            result = client.run(params)
+            print(f"Output: {result['output']}")
+            
+            # Get task info without waiting
+            task = client.run(params, wait=False)
+            task_id = task["id"]
+            
+            # Stream updates
+            for update in client.run(params, stream=True):
+                print(f"Status: {update.get('status')}")
+                if update.get('status') == TaskStatus.COMPLETED:
+                    print(f"Result: {update.get('output')}")
+            ```
+        """
+        # Create the task
         processed_input = self._process_input_data(params.get("input"))
         task = self._request("post", "/run", data={**params, "input": processed_input})
-        task_id = task["id"]
-
-        final_task: Optional[Dict[str, Any]] = None
-
-        def on_data(data: Dict[str, Any]) -> None:
-            nonlocal final_task
-            try:
-                result = _process_stream_event(
-                    data,
-                    task=task,
-                    stopper=lambda: manager.stop(),
-                )
-                if result is not None:
-                    final_task = result
-            except Exception as exc:
-                raise
-
-        def on_error(exc: Exception) -> None:
-            raise exc
-
-        def on_start() -> None:
-            pass
-
-        def on_stop() -> None:
-            pass
-
-        manager = StreamManager(
-            create_event_source=None,  # We'll set this after defining it
-            auto_reconnect=auto_reconnect,
-            max_reconnects=max_reconnects,
-            reconnect_delay_ms=reconnect_delay_ms,
-            on_data=on_data,
-            on_error=on_error,
-            on_start=on_start,
-            on_stop=on_stop,
-        )
-
-        def create_event_source() -> Generator[Dict[str, Any], None, None]:
-            url = f"/tasks/{task_id}/stream"
-            resp = self._request(
-                "get",
-                url,
-                headers={
-                    "Accept": "text/event-stream",
-                    "Cache-Control": "no-cache",
-                    "Accept-Encoding": "identity",
-                    "Connection": "keep-alive",
-                },
-                stream=True,
-                timeout=60,
-            )
+        
+        # Return immediately if not waiting
+        if not wait and not stream:
+            return _strip_task(task)
             
-            try:
-                last_event_at = time.perf_counter()
-                for evt in self._iter_sse(resp, stream_manager=manager):
-                    yield evt
-            finally:
-                try:
-                    # Force close the underlying socket if possible
-                    try:
-                        raw = getattr(resp, 'raw', None)
-                        if raw is not None:
-                            raw.close()
-                    except Exception:
-                        raise
-                    # Close the response
-                    resp.close()
-                except Exception:
-                    raise
+        # Return stream if requested
+        if stream:
+            task_stream = TaskStream(
+                task=task,
+                client=self,
+                auto_reconnect=auto_reconnect,
+                max_reconnects=max_reconnects,
+                reconnect_delay_ms=reconnect_delay_ms,
+            )
+            return task_stream
+            
+        # Otherwise wait for completion
+        return self.wait_for_completion(task["id"])
 
-        # Update the create_event_source function in the manager
-        manager._create_event_source = create_event_source
 
-        # Connect and wait for completion
-        manager.connect()
-
-        # At this point, we should have a final task state
-        if final_task is not None:
-            return final_task
-
-        # Try to fetch the latest state as a fallback
-        try:
-            latest = self.get_task(task_id)
-            status = latest.get("status")
-            if status == TaskStatus.COMPLETED:
-                return latest
-            if status == TaskStatus.FAILED:
-                raise RuntimeError(latest.get("error") or "task failed")
-            if status == TaskStatus.CANCELLED:
-                raise RuntimeError("task cancelled")
-        except Exception as exc:
-            raise
-
-        raise RuntimeError("Stream ended without completion")
 
     def cancel(self, task_id: str) -> None:
         self._request("post", f"/tasks/{task_id}/cancel")
 
     def get_task(self, task_id: str) -> Dict[str, Any]:
+        """Get the current state of a task.
+        
+        Args:
+            task_id: The ID of the task to get
+            
+        Returns:
+            Dict[str, Any]: The current task state
+        """
         return self._request("get", f"/tasks/{task_id}")
+
+    def wait_for_completion(self, task_id: str) -> Dict[str, Any]:
+        """Wait for a task to complete and return its final state.
+        
+        This method polls the task status until it reaches a terminal state
+        (completed, failed, or cancelled).
+        
+        Args:
+            task_id: The ID of the task to wait for
+            
+        Returns:
+            Dict[str, Any]: The final task state
+            
+        Raises:
+            RuntimeError: If the task fails or is cancelled
+        """
+        with self.stream_task(task_id) as stream:
+            for update in stream:
+                if update.get("status") == TaskStatus.COMPLETED:
+                    return update
+                elif update.get("status") == TaskStatus.FAILED:
+                    raise RuntimeError(update.get("error") or "Task failed")
+                elif update.get("status") == TaskStatus.CANCELLED:
+                    raise RuntimeError("Task cancelled")
+        raise RuntimeError("Stream ended without completion")
 
     # --------------- File upload ---------------
     def upload_file(self, data: Union[str, bytes], options: Optional[UploadFileOptions] = None) -> Dict[str, Any]:
@@ -403,6 +494,103 @@ class Inference:
         return file_obj
 
     # --------------- Helpers ---------------
+    def stream_task(
+        self,
+        task_id: str,
+        *,
+        auto_reconnect: bool = True,
+        max_reconnects: int = 5,
+        reconnect_delay_ms: int = 1000,
+    ) -> TaskStream:
+        """Create a TaskStream for getting streaming updates from a task.
+        
+        This provides a more Pythonic interface for handling task updates compared to callbacks.
+        The returned TaskStream can be used either as a context manager or as an iterator.
+        
+        Args:
+            task_id: The ID of the task to stream
+            auto_reconnect: Whether to automatically reconnect on connection loss
+            max_reconnects: Maximum number of reconnection attempts
+            reconnect_delay_ms: Delay between reconnection attempts in milliseconds
+            
+        Returns:
+            TaskStream: A stream interface for the task
+            
+        Example:
+            ```python
+            # Run a task
+            task = client.run(params)
+            
+            # Stream updates using context manager
+            with client.stream_task(task["id"]) as stream:
+                for update in stream:
+                    print(f"Status: {update.get('status')}")
+                    if update.get("status") == TaskStatus.COMPLETED:
+                        print(f"Result: {update.get('output')}")
+                        
+            # Or use as a simple iterator
+            for update in client.stream_task(task["id"]):
+                print(f"Update: {update}")
+            ```
+        """
+        task = self.get_task(task_id)
+        return TaskStream(
+            task=task,
+            client=self,
+            auto_reconnect=auto_reconnect,
+            max_reconnects=max_reconnects,
+            reconnect_delay_ms=reconnect_delay_ms,
+        )
+
+    def _stream_updates(
+        self,
+        task_id: str,
+        task: Dict[str, Any],
+    ) -> Generator[Union[Dict[str, Any], Exception], None, None]:
+        """Internal method to stream task updates."""
+        url = f"/tasks/{task_id}/stream"
+        resp = self._request(
+            "get",
+            url,
+            headers={
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Accept-Encoding": "identity",
+                "Connection": "keep-alive",
+            },
+            stream=True,
+            timeout=60,
+        )
+        try:
+            for evt in self._iter_sse(resp):
+                try:
+                    # Process the event to check for completion/errors
+                    result = _process_stream_event(
+                        evt,
+                        task=task,
+                        stopper=None,  # We'll handle stopping via the iterator
+                    )
+                    if result is not None:
+                        yield result
+                        break
+                    yield _strip_task(evt)
+                except Exception as exc:
+                    yield exc
+                    raise
+        finally:
+            try:
+                # Force close the underlying socket if possible
+                try:
+                    raw = getattr(resp, 'raw', None)
+                    if raw is not None:
+                        raw.close()
+                except Exception:
+                    raise
+                # Close the response
+                resp.close()
+            except Exception:
+                raise
+
     def _iter_sse(self, resp: Any, stream_manager: Optional[Any] = None) -> Generator[Dict[str, Any], None, None]:
         """Iterate JSON events from an SSE response."""
         # Mode 1: raw socket readline (can reduce buffering in some environments)
@@ -565,87 +753,113 @@ class AsyncInference:
                 return payload.get("data")
 
     # --------------- Public API ---------------
-    async def run(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        processed_input = await self._process_input_data(params.get("input"))
-        task = await self._request("post", "/run", data={**params, "input": processed_input})
-        return task
-
-    async def run_sync(
+    async def run(
         self,
         params: Dict[str, Any],
         *,
+        wait: bool = True,
+        stream: bool = False,
         auto_reconnect: bool = True,
         max_reconnects: int = 5,
         reconnect_delay_ms: int = 1000,
-    ) -> Dict[str, Any]:
+    ) -> Union[Dict[str, Any], TaskStream, Iterator[Dict[str, Any]]]:
+        """Run a task with optional streaming updates.
+        
+        By default, this method waits for the task to complete and returns the final result.
+        You can set wait=False to get just the task info, or stream=True to get an iterator
+        of status updates.
+        
+        Args:
+            params: Task parameters to pass to the API
+            wait: Whether to wait for task completion (default: True)
+            stream: Whether to return an iterator of updates (default: False)
+            auto_reconnect: Whether to automatically reconnect on connection loss
+            max_reconnects: Maximum number of reconnection attempts
+            reconnect_delay_ms: Delay between reconnection attempts in milliseconds
+            
+        Returns:
+            Union[Dict[str, Any], TaskStream, Iterator[Dict[str, Any]]]:
+                - If wait=True and stream=False: The completed task data
+                - If wait=False: The created task info
+                - If stream=True: An iterator of task updates
+            
+        Example:
+            ```python
+            # Simple usage - wait for result (default)
+            result = await client.run(params)
+            print(f"Output: {result['output']}")
+            
+            # Get task info without waiting
+            task = await client.run(params, wait=False)
+            task_id = task["id"]
+            
+            # Stream updates
+            async for update in await client.run(params, stream=True):
+                print(f"Status: {update.get('status')}")
+                if update.get('status') == TaskStatus.COMPLETED:
+                    print(f"Result: {update.get('output')}")
+            ```
+        """
+        # Create the task
         processed_input = await self._process_input_data(params.get("input"))
         task = await self._request("post", "/run", data={**params, "input": processed_input})
-        task_id = task["id"]
-
-        final_task: Optional[Dict[str, Any]] = None
-        reconnect_attempts = 0
-        had_success = False
-
-        while True:
-            try:
-                resp = await self._request(
-                    "get",
-                    f"/tasks/{task_id}/stream",
-                    headers={
-                        "Accept": "text/event-stream",
-                        "Cache-Control": "no-cache",
-                        "Accept-Encoding": "identity",
-                        "Connection": "keep-alive",
-                    },
-                    timeout=60,
-                    expect_stream=True,
-                )
-                had_success = True
-                async for data in self._aiter_sse(resp):
-                    result = _process_stream_event(
-                        data,
-                        task=task,
-                        stopper=None,
-                    )
-                    if result is not None:
-                        final_task = result
-                        break
-                if final_task is not None:
-                    break
-            except Exception as exc:  # noqa: BLE001
-                if not auto_reconnect:
-                    raise
-                if not had_success:
-                    reconnect_attempts += 1
-                    if reconnect_attempts > max_reconnects:
-                        raise
-                await _async_sleep(reconnect_delay_ms / 1000.0)
-            else:
-                if not auto_reconnect:
-                    break
-                await _async_sleep(reconnect_delay_ms / 1000.0)
-
-        if final_task is None:
-            # Fallback: fetch latest task state in case stream ended without a terminal event
-            try:
-                latest = await self.get_task(task_id)
-                status = latest.get("status")
-                if status == TaskStatus.COMPLETED:
-                    return latest
-                if status == TaskStatus.FAILED:
-                    raise RuntimeError(latest.get("error") or "task failed")
-                if status == TaskStatus.CANCELLED:
-                    raise RuntimeError("task cancelled")
-            except Exception:
-                raise
-            raise RuntimeError("Stream ended without completion")
-        return final_task
+        
+        # Return immediately if not waiting
+        if not wait and not stream:
+            return task
+            
+        # Return stream if requested
+        if stream:
+            task_stream = TaskStream(
+                task=task,
+                client=self,
+                auto_reconnect=auto_reconnect,
+                max_reconnects=max_reconnects,
+                reconnect_delay_ms=reconnect_delay_ms,
+            )
+            return task_stream
+            
+        # Otherwise wait for completion
+        return await self.wait_for_completion(task["id"])
 
     async def cancel(self, task_id: str) -> None:
         await self._request("post", f"/tasks/{task_id}/cancel")
 
     async def get_task(self, task_id: str) -> Dict[str, Any]:
+        """Get the current state of a task.
+        
+        Args:
+            task_id: The ID of the task to get
+            
+        Returns:
+            Dict[str, Any]: The current task state
+        """
         return await self._request("get", f"/tasks/{task_id}")
+
+    async def wait_for_completion(self, task_id: str) -> Dict[str, Any]:
+        """Wait for a task to complete and return its final state.
+        
+        This method polls the task status until it reaches a terminal state
+        (completed, failed, or cancelled).
+        
+        Args:
+            task_id: The ID of the task to wait for
+            
+        Returns:
+            Dict[str, Any]: The final task state
+            
+        Raises:
+            RuntimeError: If the task fails or is cancelled
+        """
+        with self.stream_task(task_id) as stream:
+            async for update in stream:
+                if update.get("status") == TaskStatus.COMPLETED:
+                    return update
+                elif update.get("status") == TaskStatus.FAILED:
+                    raise RuntimeError(update.get("error") or "Task failed")
+                elif update.get("status") == TaskStatus.CANCELLED:
+                    raise RuntimeError("Task cancelled")
+        raise RuntimeError("Stream ended without completion")
 
     # --------------- File upload ---------------
     async def upload_file(self, data: Union[str, bytes], options: Optional[UploadFileOptions] = None) -> Dict[str, Any]:
@@ -797,6 +1011,18 @@ def _looks_like_base64(value: str) -> bool:
         return False
 
 
+def _strip_task(task: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip task to essential fields."""
+    return {
+        "id": task.get("id"),
+        "created_at": task.get("created_at"),
+        "updated_at": task.get("updated_at"),
+        "input": task.get("input"),
+        "output": task.get("output"),
+        "logs": task.get("logs"),
+        "status": task.get("status"),
+    }
+
 def _process_stream_event(
     data: Dict[str, Any], *, task: Dict[str, Any], stopper: Optional[Callable[[], None]] = None
 ) -> Optional[Dict[str, Any]]:
@@ -804,16 +1030,9 @@ def _process_stream_event(
     If stopper is provided, it will be called on terminal events to end streaming.
     """
     status = data.get("status")
-    output = data.get("output")
-    logs = data.get("logs")
 
     if status == TaskStatus.COMPLETED:
-        result = {
-            **task,
-            "status": data.get("status"),
-            "output": data.get("output"),
-            "logs": data.get("logs") or [],
-        }
+        result = _strip_task(data)
         if stopper:
             stopper()
         return result

@@ -1,16 +1,62 @@
-# inference.sh CLI
+# inference.sh sdk
 
-Helper package for inference.sh Python applications.
+helper package for inference.sh python applications.
 
-## Installation
+## installation
 
 ```bash
 pip install infsh
 ```
 
-## File Handling
+## client usage
 
-The `File` class provides a standardized way to handle files in the inference.sh ecosystem:
+```python
+from infsh import Inference, TaskStatus
+
+# create client
+client = Inference(api_key="your-api-key")
+
+# simple usage - wait for result
+result = client.run({
+    "app": "your-app",
+    "input": {"key": "value"},
+    "variant": "default"
+})
+print(f"output: {result['output']}")
+
+# get task info without waiting
+task = client.run(params, wait=False)
+print(f"task id: {task['id']}")
+
+# stream updates (recommended)
+for update in client.run(params, stream=True):
+    status = update.get("status")
+    print(f"status: {TaskStatus(status).name}")
+    
+    if status == TaskStatus.COMPLETED:
+        print(f"output: {update.get('output')}")
+        break
+    elif status == TaskStatus.FAILED:
+        print(f"error: {update.get('error')}")
+        break
+
+# async support
+async def run_async():
+    from infsh import AsyncInference
+    
+    client = AsyncInference(api_key="your-api-key")
+    
+    # simple usage
+    result = await client.run(params)
+    
+    # stream updates
+    async for update in await client.run(params, stream=True):
+        print(f"status: {TaskStatus(update['status']).name}")
+```
+
+## file handling
+
+the `File` class provides a standardized way to handle files in the inference.sh ecosystem:
 
 ```python
 from infsh import File
@@ -41,15 +87,15 @@ print(file.filename)   # basename of the file
 file.refresh_metadata()
 ```
 
-The `File` class automatically handles:
-- MIME type detection
-- File size calculation
-- Filename extraction from path
-- File existence checking
+the `File` class automatically handles:
+- mime type detection
+- file size calculation
+- filename extraction from path
+- file existence checking
 
-## Creating an App
+## creating an app
 
-To create an inference app, inherit from `BaseApp` and define your input/output types:
+to create an inference app, inherit from `BaseApp` and define your input/output types:
 
 ```python
 from infsh import BaseApp, BaseAppInput, BaseAppOutput, File
@@ -76,7 +122,7 @@ class MyApp(BaseApp):
         pass
 ```
 
-The app lifecycle has three main methods:
-- `setup()`: Called when the app starts, use it to initialize models
-- `run()`: Called for each inference request
-- `unload()`: Called when shutting down, use it to free resources
+app lifecycle has three main methods:
+- `setup()`: called when the app starts, use it to initialize models
+- `run()`: called for each inference request
+- `unload()`: called when shutting down, use it to free resources
