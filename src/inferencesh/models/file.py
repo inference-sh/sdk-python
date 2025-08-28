@@ -4,7 +4,6 @@ import mimetypes
 import os
 import urllib.request
 import urllib.parse
-import tempfile
 import hashlib
 from pathlib import Path
 from tqdm import tqdm
@@ -119,12 +118,10 @@ class File(BaseModel):
             return
             
         print(f"Downloading URL: {original_url} to {cache_path}")
-        tmp_file = None
         try:
-            # Download to temporary file first to avoid partial downloads in cache
-            suffix = os.path.splitext(urllib.parse.urlparse(original_url).path)[1]
-            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-            self._tmp_path = tmp_file.name
+            # Download to a temporary filename in the final directory
+            tmp_path = str(cache_path) + '.tmp'
+            self._tmp_path = tmp_path
             
             # Set up request with user agent
             headers = {
@@ -176,8 +173,8 @@ class File(BaseModel):
                                     # If we read the whole body at once, exit loop
                                     break
                             
-                # Move the temporary file to the cache location
-                os.replace(self._tmp_path, cache_path)
+                # Rename the temporary file to the final name
+                os.rename(self._tmp_path, cache_path)
                 self._tmp_path = None  # Prevent deletion in __del__
                 self.path = str(cache_path)
             except (urllib.error.URLError, urllib.error.HTTPError) as e:
@@ -186,7 +183,7 @@ class File(BaseModel):
                 raise RuntimeError(f"Failed to write downloaded file to {self._tmp_path}: {str(e)}")
         except Exception as e:
             # Clean up temp file if something went wrong
-            if tmp_file is not None and hasattr(self, '_tmp_path'):
+            if hasattr(self, '_tmp_path') and self._tmp_path:
                 try:
                     os.unlink(self._tmp_path)
                 except (OSError, IOError):
