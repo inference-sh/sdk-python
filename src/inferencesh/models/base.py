@@ -1,9 +1,11 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 import inspect
 import ast
 import textwrap
 from collections import OrderedDict
+from inferencesh.models.file import File
+from pydantic import Field
 
 
 class OrderedSchemaModel(BaseModel):
@@ -92,3 +94,68 @@ class BaseApp(BaseModel):
 
     async def unload(self):
         pass 
+    
+    
+# Mixins
+
+class OptionalImageFieldMixin(BaseModel):
+    image: Optional[File] = Field(
+        description="the image to use for the model",
+        default=None,
+        contentMediaType="image/*",
+    )
+
+class RequiredImageFieldMixin(BaseModel):
+    image: File = Field(
+        description="the image to use for the model",
+        contentMediaType="image/*",
+    )
+    
+class OptionalVideoFieldMixin(BaseModel):
+    video: Optional[File] = Field(
+        description="the video to use for the model",
+        default=None,
+        contentMediaType="video/*",
+    )
+    
+class RequiredVideoFieldMixin(BaseModel):
+    video: File = Field(
+        description="the video to use for the model",
+        contentMediaType="video/*",
+    )
+    
+class OptionalAudioFieldMixin(BaseModel):
+    audio: Optional[File] = Field(
+        description="the audio to use for the model",
+        default=None,
+        contentMediaType="audio/*",
+    )
+    
+class RequiredAudioFieldMixin(BaseModel):
+    audio: File = Field(
+        description="the audio to use for the model",
+        contentMediaType="audio/*",
+    )
+    
+class OptionalTextFieldMixin(BaseModel):
+    text: Optional[str] = Field(
+        description="the text to use for the model",
+        default=None,
+    )
+    
+class RequiredTextFieldMixin(BaseModel):
+    text: str = Field(
+        description="the text to use for the model",
+    )
+    
+class OptionalFileFieldMixin(BaseModel):
+    file: Optional[File] = Field(
+        description="the file to use for the model",
+        default=None,
+    )
+    
+class RequiredFileFieldMixin(BaseModel):
+    file: Optional[File] = Field(
+        description="the file to use for the model",
+        default=None,
+    )
