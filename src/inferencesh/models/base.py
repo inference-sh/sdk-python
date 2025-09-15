@@ -7,6 +7,17 @@ from collections import OrderedDict
 from inferencesh.models.file import File
 from pydantic import Field
 
+class Metadata(BaseModel):
+    app_id: Optional[str] = None
+    app_version_id: Optional[str] = None
+    app_variant: Optional[str] = None
+    worker_id: Optional[str] = None
+    def update(self, other: Dict[str, Any] | BaseModel) -> None:
+        update_dict = other.model_dump() if isinstance(other, BaseModel) else other
+        for key, value in update_dict.items():
+            setattr(self, key, value)
+    class Config:
+        extra = "allow"
 
 class OrderedSchemaModel(BaseModel):
     """A base model that ensures the JSON schema properties and required fields are in the order of field definition."""
