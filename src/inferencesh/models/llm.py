@@ -584,6 +584,7 @@ def stream_generate(
     stop: Optional[List[str]] = None,
     verbose: bool = False,
     output_cls: type[BaseLLMOutput] = LLMOutput,
+    kwargs: Optional[Dict[str, Any]] = None,
 ) -> Generator[BaseLLMOutput, None, None]:
     """Stream generate from LLaMA.cpp model with timing and usage tracking."""
         
@@ -604,7 +605,8 @@ def stream_generate(
                 "stream": True,
                 "temperature": temperature,
                 "top_p": top_p,
-                "stop": stop
+                "stop": stop,
+                **kwargs
             }
             if tools is not None:
                 completion_kwargs["tools"] = tools
