@@ -606,8 +606,9 @@ def stream_generate(
                 "temperature": temperature,
                 "top_p": top_p,
                 "stop": stop,
-                **kwargs
             }
+            if kwargs:
+                completion_kwargs.update(kwargs)
             if tools is not None:
                 completion_kwargs["tools"] = tools
             if tool_choice is not None:
