@@ -7,9 +7,9 @@ import urllib.parse
 import hashlib
 from pathlib import Path
 from tqdm import tqdm
-from pydantic_core import core_schema
-from pydantic_core.core_schema import GetJsonSchemaHandler, JsonSchemaValue
 
+from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler, JsonSchemaValue
+from pydantic_core import CoreSchema, core_schema
 
 class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
