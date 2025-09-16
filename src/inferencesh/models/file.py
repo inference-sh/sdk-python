@@ -270,8 +270,8 @@ class File(BaseModel):
         return {
             "$id": "/schemas/File",
             "oneOf": [
-                {"type": "string"},
-                json_schema
+                json_schema,
+                {"type": "string"}
             ]
         }
     
