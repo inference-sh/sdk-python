@@ -7,6 +7,8 @@ import urllib.parse
 import hashlib
 from pathlib import Path
 from tqdm import tqdm
+from pydantic_core import core_schema
+from pydantic_core.core_schema import GetJsonSchemaHandler, JsonSchemaValue
 
 
 class File(BaseModel):
@@ -239,21 +241,24 @@ class File(BaseModel):
     @classmethod
     def model_json_schema(cls, **kwargs):
         schema = super().model_json_schema(**kwargs)
+        schema["$id"] = "/schemas/File"
         # Create a schema that accepts either a string or the full object
-        base_schema = {
-            "anyOf": [
+        return {
+            "oneOf": [
                 {"type": "string"},  # Accept string input
-                {
-                    "type": "object",
-                    "properties": schema["properties"],
-                    "title": schema.get("title", "File"),
-                    "description": "A class representing a file in the inference.sh ecosystem."
-                }
+                schema  # Accept full object input
+            ]
+        } 
+        
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        schema = handler(core_schema)  # this is the "normal" schema
+        return {
+            "oneOf": [
+                {"type": "string"},
+                schema
             ]
         }
-        # If this is the top-level schema, return as is
-        if not kwargs.get("ref_template"):
-            return base_schema
-        # If this is being used in $defs, include it in the schema
-        schema.update(base_schema)
-        return schema
+    
