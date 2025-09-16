@@ -242,8 +242,10 @@ class File(BaseModel):
         schema["$id"] = "/schemas/File"
         # Create a schema that accepts either a string or the full object
         return {
-            "oneOf": [
+            "anyOf": [
                 {"type": "string"},  # Accept string input
                 schema  # Accept full object input
-            ]
+            ],
+            "title": "File",
+            "description": "A class representing a file in the inference.sh ecosystem."
         } 
