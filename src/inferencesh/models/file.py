@@ -1,5 +1,6 @@
-from typing import Optional, Union, Any
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from typing import Optional, Union, Any, Type
+from pydantic import BaseModel, Field, PrivateAttr, model_validator, GetCoreSchemaHandler, GetJsonSchemaHandler
+from pydantic_core import CoreSchema, core_schema
 import mimetypes
 import os
 import urllib.request
@@ -8,7 +9,7 @@ import hashlib
 from pathlib import Path
 from tqdm import tqdm
 
-from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler, JsonSchemaValue
+from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 
 class File(BaseModel):
@@ -239,26 +240,35 @@ class File(BaseModel):
             self.filename = self._get_filename()
 
     @classmethod
-    def model_json_schema(cls, **kwargs):
-        schema = super().model_json_schema(**kwargs)
-        schema["$id"] = "/schemas/File"
-        # Create a schema that accepts either a string or the full object
-        return {
-            "oneOf": [
-                {"type": "string"},  # Accept string input
-                schema  # Accept full object input
-            ]
-        } 
+    def __get_pydantic_core_schema__(
+        cls, source: Type[Any], handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        """Generates a Pydantic Core schema for validation of this File class"""
+        # Get the default schema for our class
+        schema = handler(source)
         
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.union_schema([
+                core_schema.str_schema(),  # Accept string input
+                schema,  # Accept full object input
+            ]),
+            python_schema=schema,
+            serialization=schema.get("serialization", {}),
+        )
+
     @classmethod
     def __get_pydantic_json_schema__(
-        cls, core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
-    ) -> JsonSchemaValue:
-        schema = handler(core_schema)  # this is the "normal" schema
-        return {
+        cls, schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> dict[str, Any]:
+        """Customizes the JSON schema generation for this File class"""
+        json_schema = handler(schema)
+        json_schema = handler.resolve_ref_schema(json_schema)
+        json_schema.update({
+            "$id": "/schemas/File",
             "oneOf": [
                 {"type": "string"},
-                schema
+                json_schema
             ]
-        }
+        })
+        return json_schema
     
