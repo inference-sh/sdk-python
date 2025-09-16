@@ -1,6 +1,6 @@
-from typing import Optional, Union, Any, Type
-from pydantic import BaseModel, Field, PrivateAttr, model_validator, GetCoreSchemaHandler, GetJsonSchemaHandler
-from pydantic_core import CoreSchema, core_schema
+from typing import Optional, Union, Any
+from pydantic import BaseModel, Field, PrivateAttr, model_validator, GetJsonSchemaHandler
+from pydantic_core import CoreSchema
 import mimetypes
 import os
 import urllib.request
@@ -264,15 +264,14 @@ class File(BaseModel):
     def __get_pydantic_json_schema__(
         cls, schema: CoreSchema, handler: GetJsonSchemaHandler
     ) -> dict[str, Any]:
-        """Customizes the JSON schema generation for this File class"""
+        """Generate a simple JSON schema that accepts either a string or an object"""
         json_schema = handler(schema)
-        json_schema = handler.resolve_ref_schema(json_schema)
-        json_schema.update({
+        # Don't resolve refs here - that's what was causing the recursion
+        return {
             "$id": "/schemas/File",
             "oneOf": [
                 {"type": "string"},
                 json_schema
             ]
-        })
-        return json_schema
+        }
     
