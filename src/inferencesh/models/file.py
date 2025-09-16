@@ -9,9 +9,6 @@ import hashlib
 from pathlib import Path
 from tqdm import tqdm
 
-from pydantic import GetCoreSchemaHandler, GetJsonSchemaHandler
-from pydantic_core import CoreSchema, core_schema
-
 class File(BaseModel):
     """A class representing a file in the inference.sh ecosystem."""
     
@@ -239,22 +236,29 @@ class File(BaseModel):
             self.size = self._get_file_size()  # Always update size
             self.filename = self._get_filename()
 
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls, source: Type[Any], handler: GetCoreSchemaHandler
-    ) -> CoreSchema:
-        """Generates a Pydantic Core schema for validation of this File class"""
-        # Get the default schema for our class
-        schema = handler(source)
+    # @classmethod
+    # def __get_pydantic_core_schema__(
+    #     cls, source: Type[Any], handler: GetCoreSchemaHandler
+    # ) -> CoreSchema:
+    #     """Generates a Pydantic Core schema for validation of this File class"""
+    #     # Get the default schema for our class
+    #     schema = handler(source)
         
-        return core_schema.json_or_python_schema(
-            json_schema=core_schema.union_schema([
-                core_schema.str_schema(),  # Accept string input
-                schema,  # Accept full object input
-            ]),
-            python_schema=schema,
-            serialization=schema.get("serialization", {}),
-        )
+    #     # Create a proper serialization schema that includes the type
+    #     serialization = core_schema.plain_serializer_function_ser_schema(
+    #         lambda x: x.uri if x.uri else x.path,
+    #         return_schema=core_schema.str_schema(),
+    #         when_used="json",
+    #     )
+        
+    #     return core_schema.json_or_python_schema(
+    #         json_schema=core_schema.union_schema([
+    #             core_schema.str_schema(),  # Accept string input
+    #             schema,  # Accept full object input
+    #         ]),
+    #         python_schema=schema,
+    #         serialization=serialization,
+    #     )
 
     @classmethod
     def __get_pydantic_json_schema__(
