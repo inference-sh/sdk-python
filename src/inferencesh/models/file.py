@@ -239,13 +239,21 @@ class File(BaseModel):
     @classmethod
     def model_json_schema(cls, **kwargs):
         schema = super().model_json_schema(**kwargs)
-        schema["$id"] = "/schemas/File"
         # Create a schema that accepts either a string or the full object
-        return {
+        base_schema = {
             "anyOf": [
                 {"type": "string"},  # Accept string input
-                schema  # Accept full object input
-            ],
-            "title": "File",
-            "description": "A class representing a file in the inference.sh ecosystem."
-        } 
+                {
+                    "type": "object",
+                    "properties": schema["properties"],
+                    "title": schema.get("title", "File"),
+                    "description": "A class representing a file in the inference.sh ecosystem."
+                }
+            ]
+        }
+        # If this is the top-level schema, return as is
+        if not kwargs.get("ref_template"):
+            return base_schema
+        # If this is being used in $defs, include it in the schema
+        schema.update(base_schema)
+        return schema
