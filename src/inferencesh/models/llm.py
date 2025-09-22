@@ -464,26 +464,27 @@ class ResponseTransformer:
             text: Cleaned text to process for reasoning
         """
         # Default implementation for <think> style reasoning
-        if "<think>" in text and not self.state.state_changes["reasoning_started"]:
+        # Check for tags in the complete buffer
+        if "<think>" in self.state.buffer and not self.state.state_changes["reasoning_started"]:
             self.state.state_changes["reasoning_started"] = True
             if self.timing:
                 self.timing.start_reasoning()
         
-        if "</think>" in text and not self.state.state_changes["reasoning_ended"]:
-            self.state.state_changes["reasoning_ended"] = True
-            if self.timing:
-                # Estimate token count from character count (rough approximation)
-                token_count = len(self.state.buffer.split("<think>")[1].split("</think>")[0]) // 4
-                self.timing.end_reasoning(token_count)
-        
-        if "<think>" in self.state.buffer:
-            parts = self.state.buffer.split("</think>", 1)
-            if len(parts) > 1:
-                self.state.reasoning = parts[0].split("<think>", 1)[1].strip()
-                self.state.response = parts[1].strip()
-            else:
-                self.state.reasoning = self.state.buffer.split("<think>", 1)[1].strip()
-                self.state.response = ""
+        # Extract content and handle end of reasoning
+        parts = self.state.buffer.split("<think>", 1)
+        if len(parts) > 1:
+            reasoning_text = parts[1]
+            end_parts = reasoning_text.split("</think>", 1)
+            self.state.reasoning = end_parts[0].strip()
+            self.state.response = end_parts[1].strip() if len(end_parts) > 1 else ""
+            
+            # Check for end tag in complete buffer
+            if "</think>" in self.state.buffer and not self.state.state_changes["reasoning_ended"]:
+                self.state.state_changes["reasoning_ended"] = True
+                if self.timing:
+                    # Estimate token count from character count (rough approximation)
+                    token_count = len(self.state.reasoning) // 4
+                    self.timing.end_reasoning(token_count)
         else:
             self.state.response = self.state.buffer
     
