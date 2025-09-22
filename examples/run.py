@@ -4,25 +4,34 @@ from inferencesh import Inference, TaskStatus  # type: ignore
 def run_with_updates() -> None:
     """Example showing how to get streaming updates."""
     api_key = "1nfsh-7yxm9j9mdpkkpsab2dxtnddxft"
-    client = Inference(api_key=api_key, base_url="https://api-dev.inference.sh")
+    client = Inference(api_key=api_key, base_url="https://api.inference.sh")
 
     try:
         # Run with stream=True to get updates
         for update in client.run(
             {
-                "app": "lginf/llm-router",
-                "input": {"image": "https://storage.googleapis.com/folip-api-images/images/rGF6LfQuGQUEox9YF3JkuOiITUm1/dc4c0e18cb7a4f669bc6b6f3b99e6147.png"},
+                "app": "infsh/glm-45-air",
+                "input": {"text": "lolo"},
                 "infra": "cloud",
                 "variant": "default"
             },
             stream=True  # Enable streaming updates
         ):
-            # Print each update as it comes in
+            # Print detailed update info
             status = update.get("status")
             status_name = TaskStatus(status).name if status is not None else "UNKNOWN"
-            print(f"Status: {status_name}")
             
-            # Print output when task completes
+            # Print all available info
+            print("\nUpdate received:")
+            print(f"  Status: {status_name}")
+            if update.get("logs"):
+                print(f"  Logs: {update['logs']}")
+            if update.get("progress"):
+                print(f"  Progress: {update['progress']}")
+            if update.get("metrics"):
+                print(f"  Metrics: {update['metrics']}")
+            
+            # Handle completion states
             if status == TaskStatus.COMPLETED:
                 print("\n✓ Task completed!")
                 print(f"Output: {update.get('output')}")
@@ -45,26 +54,15 @@ def run_simple() -> None:
     client = Inference(api_key=api_key, base_url="https://api-dev.inference.sh")
 
     try:
-        # Simple synchronous run
-        task = client.run(
-            {
-                "app": "lginf/llm-router",
-                "input": {"image": "https://storage.googleapis.com/folip-api-images/images/rGF6LfQuGQUEox9YF3JkuOiITUm1/dc4c0e18cb7a4f669bc6b6f3b99e6147.png"},
-                "infra": "cloud",
-                "variant": "default"
-            }
-        )
+        # Simple synchronous run - waits for completion by default
+        result = client.run({
+            "app": "lginf/llm-router",
+            "input": {"image": "https://storage.googleapis.com/folip-api-images/images/rGF6LfQuGQUEox9YF3JkuOiITUm1/dc4c0e18cb7a4f669bc6b6f3b99e6147.png"},
+            "infra": "cloud",
+            "variant": "default"
+        })
         
-        print(f"Task ID: {task.get('id')}")
-
-        # Print final task
-        if task.get("status") == TaskStatus.COMPLETED:
-            print("\n✓ Task completed successfully!")
-            print(f"Output: {task.get('output')}")
-        else:
-            status = task.get("status")
-            status_name = TaskStatus(status).name if status is not None else "UNKNOWN"
-            print(f"\n✗ Task did not complete. Final status: {status_name}")
+        print(f"Task completed! Output: {result['output']}")
 
     except Exception as exc:  # noqa: BLE001
         print(f"\nError: {type(exc).__name__}: {exc}")

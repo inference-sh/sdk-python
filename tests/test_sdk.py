@@ -160,3 +160,18 @@ def test_file_cleanup(monkeypatch):
         assert os.path.exists(tmp_path)
         del file
         assert not os.path.exists(tmp_path) 
+        
+def test_file_schema():
+    file = File(uri="https://example.com/test.txt")
+    print(file.model_json_schema())
+    assert file.model_json_schema() is not None
+    assert file.model_json_schema()["$id"] == "/schemas/File"
+    assert file.model_json_schema()["oneOf"] is not None
+    assert file.model_json_schema()["oneOf"][0] is not None
+    assert file.model_json_schema()["oneOf"][0]["type"] == "object"
+    assert file.model_json_schema()["oneOf"][0]["properties"] is not None
+    assert file.model_json_schema()["oneOf"][0]["properties"]["uri"] is not None
+    assert file.model_json_schema()["oneOf"][0]["properties"]["path"] is not None
+    assert file.model_json_schema()["oneOf"][0]["properties"]["content_type"] is not None
+    assert file.model_json_schema()["oneOf"][0]["properties"]["size"] is not None
+    assert file.model_json_schema()["oneOf"][0]["properties"]["filename"] is not None

@@ -366,7 +366,8 @@ class Inference:
             task_id = task["id"]
             
             # Stream updates
-            for update in client.run(params, stream=True):
+            stream = client.run(params, stream=True)
+            for update in stream:
                 print(f"Status: {update.get('status')}")
                 if update.get('status') == TaskStatus.COMPLETED:
                     print(f"Result: {update.get('output')}")
@@ -794,7 +795,8 @@ class AsyncInference:
             task_id = task["id"]
             
             # Stream updates
-            async for update in await client.run(params, stream=True):
+            stream = await client.run(params, stream=True)
+            for update in stream:
                 print(f"Status: {update.get('status')}")
                 if update.get('status') == TaskStatus.COMPLETED:
                     print(f"Result: {update.get('output')}")

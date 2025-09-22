@@ -266,11 +266,15 @@ class File(BaseModel):
     ) -> dict[str, Any]:
         """Generate a simple JSON schema that accepts either a string or an object"""
         json_schema = handler(schema)
-        # Don't resolve refs here - that's what was causing the recursion
+        if "$ref" in json_schema:
+            # If we got a ref, resolve it to the actual schema
+            json_schema = handler.resolve_ref_schema(json_schema)
+        
+        # Add string as an alternative without recursion
         return {
             "$id": "/schemas/File",
             "oneOf": [
-                json_schema,
+                {k: v for k, v in json_schema.items() if k != "$ref"},  # Remove any $ref to prevent recursion
                 {"type": "string"}
             ]
         }
