@@ -14,6 +14,7 @@ class ContextMessageRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant" 
     SYSTEM = "system"
+    TOOL = "tool"
 
 
 class Message(BaseAppInput):
