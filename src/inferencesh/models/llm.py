@@ -650,6 +650,7 @@ def stream_generate(
         last_activity = time.time()
         init_timeout = 30.0  # 30 seconds for initial response
         chunk_timeout = 10.0  # 10 seconds between chunks
+        chunks_begun = False
         
         try:
             # Wait for initial setup
@@ -680,7 +681,7 @@ def stream_generate(
                     pass
                 
                 # Check for timeout
-                if time.time() - last_activity > chunk_timeout:
+                if chunks_begun and time.time() - last_activity > chunk_timeout:
                     raise RuntimeError(f"No response from model for {chunk_timeout} seconds")
                 
                 # Get next chunk
@@ -704,6 +705,8 @@ def stream_generate(
                 # Mark first token time
                 if not timing.first_token_time:
                     timing.mark_first_token()
+                
+                chunks_begun = True
                 
                 # Update response state from chunk
                 response.update_from_chunk(chunk, timing)
