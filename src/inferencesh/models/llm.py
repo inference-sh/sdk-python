@@ -21,7 +21,6 @@ class Message(BaseAppInput):
     role: ContextMessageRole
     content: str
 
-
 class ContextMessage(BaseAppInput):
     role: ContextMessageRole = Field(
         description="the role of the message. user, assistant, or system",
@@ -31,6 +30,10 @@ class ContextMessage(BaseAppInput):
     )
     image: Optional[File] = Field(
         description="the image file of the message",
+        default=None
+    )
+    tool_calls: Optional[List[Dict[str, Any]]] = Field(
+        description="the tool calls of the message",
         default=None
     )
 
@@ -53,8 +56,12 @@ class BaseLLMInput(BaseAppInput):
             ]
         ]
     )
+    role: ContextMessageRole = Field(
+        description="the role of the input text",
+        default=ContextMessageRole.USER
+    )
     text: str = Field(
-        description="the user prompt to use for the model",
+        description="the input text to use for the model",
         examples=[
             "write a haiku about artificial general intelligence"
         ]
@@ -217,6 +224,8 @@ def build_messages(
                 parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
             elif msg.image.uri:
                 parts.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
+        if msg.tool_calls:
+            parts.append({"type": "tool_call", "tool_calls": msg.tool_calls})
         if allow_multipart:
             return parts
         if len(parts) == 1 and parts[0]["type"] == "text":
