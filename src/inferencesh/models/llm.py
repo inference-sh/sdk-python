@@ -239,7 +239,11 @@ def build_messages(
         return ContextMessage(role=messages[0].role, text=text, image=image)
     
     def merge_tool_calls(messages: List[ContextMessage]) -> List[Dict[str, Any]]:
-        return [msg.tool_calls for msg in messages if msg.tool_calls]
+        tool_calls = []
+        for msg in messages:
+            if msg.tool_calls:
+                tool_calls.extend(msg.tool_calls)
+        return tool_calls
 
     user_input_text = ""
     if hasattr(input_data, "text"):
