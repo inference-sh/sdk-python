@@ -224,8 +224,6 @@ def build_messages(
                 parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
             elif msg.image.uri:
                 parts.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
-        if msg.tool_calls:
-            parts.append({"type": "tool_call", "tool_calls": msg.tool_calls})
         if allow_multipart:
             return parts
         if len(parts) == 1 and parts[0]["type"] == "text":
@@ -239,6 +237,9 @@ def build_messages(
         images = [msg.image for msg in messages if msg.image]
         image = images[0] if images else None # TODO: handle multiple images
         return ContextMessage(role=messages[0].role, text=text, image=image)
+    
+    def merge_tool_calls(messages: List[ContextMessage]) -> List[Dict[str, Any]]:
+        return [msg.tool_calls for msg in messages if msg.tool_calls]
 
     user_input_text = ""
     if hasattr(input_data, "text"):
@@ -264,14 +265,16 @@ def build_messages(
         else:
             messages.append({
                 "role": current_role,
-                "content": render_message(merge_messages(current_messages), allow_multipart=multipart)
+                "content": render_message(merge_messages(current_messages), allow_multipart=multipart),
+                "tool_calls": merge_tool_calls(current_messages)
             })
             current_messages = [msg]
             current_role = msg.role
     if len(current_messages) > 0:
         messages.append({
             "role": current_role,
-            "content": render_message(merge_messages(current_messages), allow_multipart=multipart)
+            "content": render_message(merge_messages(current_messages), allow_multipart=multipart),
+            "tool_calls": merge_tool_calls(current_messages)
         })
 
     return messages
