@@ -255,7 +255,8 @@ def build_messages(
         user_input_image = input_data.image
         multipart = multipart or input_data.image is not None
 
-    user_msg = ContextMessage(role=ContextMessageRole.USER, text=user_input_text, image=user_input_image)
+    input_role = input_data.role if hasattr(input_data, "role") else ContextMessageRole.USER
+    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image)
 
     input_data.context.append(user_msg)
 
