@@ -6,6 +6,7 @@ from threading import Thread
 import time
 from contextlib import contextmanager
 import base64
+import json
 
 from .base import BaseAppInput, BaseAppOutput
 from .file import File
@@ -216,6 +217,10 @@ def build_messages(
     def render_message(msg: ContextMessage, allow_multipart: bool) -> str | List[dict]:
         parts = []
         text = transform_user_message(msg.text) if transform_user_message and msg.role == ContextMessageRole.USER else msg.text
+        if msg.tool_calls:
+            for tool_call in msg.tool_calls:
+                tool_call_string = json.dumps(tool_call)
+                text += f"\n\nTool call: {tool_call_string}"
         if text:
             parts.append({"type": "text", "text": text})
         if msg.image:
@@ -228,7 +233,11 @@ def build_messages(
             return parts
         if len(parts) == 1 and parts[0]["type"] == "text":
             return parts[0]["text"]
-        raise ValueError("Image content requires multipart support")
+        if len(parts) > 1:
+            if parts.any(lambda x: x["type"] == "image_url"):
+                raise ValueError("Image content requires multipart support")
+            return parts
+        raise ValueError("Invalid message content")
 
     messages = [{"role": "system", "content": input_data.system_prompt}] if input_data.system_prompt is not None and input_data.system_prompt != "" else []
 
