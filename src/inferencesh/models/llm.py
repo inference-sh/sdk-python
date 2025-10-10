@@ -217,12 +217,10 @@ def build_messages(
     def render_message(msg: ContextMessage, allow_multipart: bool) -> str | List[dict]:
         parts = []
         text = transform_user_message(msg.text) if transform_user_message and msg.role == ContextMessageRole.USER else msg.text
-        if msg.tool_calls:
-            for tool_call in msg.tool_calls:
-                tool_call_string = json.dumps(tool_call)
-                text += f"\n\nTool call: {tool_call_string}"
         if text:
             parts.append({"type": "text", "text": text})
+        else:
+            parts.append({"type": "text", "text": ""})
         if msg.image:
             if msg.image.path:
                 image_data_uri = image_to_base64_data_uri(msg.image.path)
