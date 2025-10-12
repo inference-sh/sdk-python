@@ -96,6 +96,10 @@ class ToolsCapabilityMixin(BaseModel):
         description="tool definitions for function calling",
         default=None
     )
+    tool_call_id: Optional[str] = Field(
+        description="the tool call id for tool role messages",
+        default=None
+    )
 
 # Example of how to use:
 class LLMInput(BaseLLMInput):
