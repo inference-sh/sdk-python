@@ -271,7 +271,8 @@ def build_messages(
         multipart = multipart or input_data.image is not None
 
     input_role = input_data.role if hasattr(input_data, "role") else ContextMessageRole.USER
-    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image)
+    input_tool_call_id = input_data.tool_call_id if hasattr(input_data, "tool_call_id") else None
+    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image, tool_call_id=input_tool_call_id)
 
     input_data.context.append(user_msg)
 
