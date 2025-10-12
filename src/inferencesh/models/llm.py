@@ -37,6 +37,10 @@ class ContextMessage(BaseAppInput):
         description="the tool calls of the message",
         default=None
     )
+    tool_call_id: Optional[str] = Field(
+        description="the tool call id for tool role messages",
+        default=None
+    )
 
 class BaseLLMInput(BaseAppInput):
     """Base class with common LLM fields."""
@@ -275,19 +279,44 @@ def build_messages(
             current_messages.append(msg)
             current_role = msg.role
         else:
-            messages.append({
-                "role": current_role,
+            # Convert role enum to string for OpenAI API compatibility
+            role_str = current_role.value if hasattr(current_role, "value") else current_role
+            msg_dict = {
+                "role": role_str,
                 "content": render_message(merge_messages(current_messages), allow_multipart=multipart),
-                "tool_calls": merge_tool_calls(current_messages)
-            })
+            }
+            
+            # Only add tool_calls if not empty
+            tool_calls = merge_tool_calls(current_messages)
+            if tool_calls:
+                msg_dict["tool_calls"] = tool_calls
+            
+            # Add tool_call_id if present (for tool role messages)
+            if current_messages and current_messages[0].tool_call_id:
+                msg_dict["tool_call_id"] = current_messages[0].tool_call_id
+            
+            messages.append(msg_dict)
             current_messages = [msg]
             current_role = msg.role
+    
     if len(current_messages) > 0:
-        messages.append({
-            "role": current_role,
+        # Convert role enum to string for OpenAI API compatibility
+        role_str = current_role.value if hasattr(current_role, "value") else current_role
+        msg_dict = {
+            "role": role_str,
             "content": render_message(merge_messages(current_messages), allow_multipart=multipart),
-            "tool_calls": merge_tool_calls(current_messages)
-        })
+        }
+        
+        # Only add tool_calls if not empty
+        tool_calls = merge_tool_calls(current_messages)
+        if tool_calls:
+            msg_dict["tool_calls"] = tool_calls
+        
+        # Add tool_call_id if present (for tool role messages)
+        if current_messages and current_messages[0].tool_call_id:
+            msg_dict["tool_call_id"] = current_messages[0].tool_call_id
+        
+        messages.append(msg_dict)
 
     return messages
 
