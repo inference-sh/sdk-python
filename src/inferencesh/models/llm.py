@@ -352,6 +352,9 @@ def build_tools(tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str
         # Ensure parameters is not None (OpenAI API requirement)
         if func_def.get("parameters") is None:
             func_def["parameters"] = {"type": "object", "properties": {}}
+        # Also ensure properties within parameters is not None
+        elif func_def["parameters"].get("properties") is None:
+            func_def["parameters"]["properties"] = {}
         
         # Wrap in OpenAI format
         result.append({"type": "function", "function": func_def})
