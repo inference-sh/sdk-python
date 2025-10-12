@@ -296,9 +296,13 @@ def build_messages(
                             tc["function"]["arguments"] = json.dumps(tc["function"]["arguments"])
                 msg_dict["tool_calls"] = tool_calls
             
-            # Add tool_call_id if present (for tool role messages)
-            if current_messages and current_messages[0].tool_call_id:
-                msg_dict["tool_call_id"] = current_messages[0].tool_call_id
+            # Add tool_call_id for tool role messages (required by OpenAI API)
+            if role_str == "tool":
+                if current_messages and current_messages[0].tool_call_id:
+                    msg_dict["tool_call_id"] = current_messages[0].tool_call_id
+                else:
+                    # If not provided, use empty string to satisfy schema
+                    msg_dict["tool_call_id"] = ""
             
             messages.append(msg_dict)
             current_messages = [msg]
@@ -322,9 +326,13 @@ def build_messages(
                         tc["function"]["arguments"] = json.dumps(tc["function"]["arguments"])
             msg_dict["tool_calls"] = tool_calls
         
-        # Add tool_call_id if present (for tool role messages)
-        if current_messages and current_messages[0].tool_call_id:
-            msg_dict["tool_call_id"] = current_messages[0].tool_call_id
+        # Add tool_call_id for tool role messages (required by OpenAI API)
+        if role_str == "tool":
+            if current_messages and current_messages[0].tool_call_id:
+                msg_dict["tool_call_id"] = current_messages[0].tool_call_id
+            else:
+                # If not provided, use empty string to satisfy schema
+                msg_dict["tool_call_id"] = ""
         
         messages.append(msg_dict)
 
