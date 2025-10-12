@@ -289,6 +289,11 @@ def build_messages(
             # Only add tool_calls if not empty
             tool_calls = merge_tool_calls(current_messages)
             if tool_calls:
+                # Ensure arguments are JSON strings (OpenAI API requirement)
+                for tc in tool_calls:
+                    if "function" in tc and "arguments" in tc["function"]:
+                        if isinstance(tc["function"]["arguments"], dict):
+                            tc["function"]["arguments"] = json.dumps(tc["function"]["arguments"])
                 msg_dict["tool_calls"] = tool_calls
             
             # Add tool_call_id if present (for tool role messages)
@@ -310,6 +315,11 @@ def build_messages(
         # Only add tool_calls if not empty
         tool_calls = merge_tool_calls(current_messages)
         if tool_calls:
+            # Ensure arguments are JSON strings (OpenAI API requirement)
+            for tc in tool_calls:
+                if "function" in tc and "arguments" in tc["function"]:
+                    if isinstance(tc["function"]["arguments"], dict):
+                        tc["function"]["arguments"] = json.dumps(tc["function"]["arguments"])
             msg_dict["tool_calls"] = tool_calls
         
         # Add tool_call_id if present (for tool role messages)
@@ -319,6 +329,34 @@ def build_messages(
         messages.append(msg_dict)
 
     return messages
+
+
+def build_tools(tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
+    """Build tools in OpenAI API format.
+    
+    Ensures tools are properly formatted:
+    - Wrapped in {"type": "function", "function": {...}}
+    - Parameters is never None (OpenAI API requirement)
+    """
+    if not tools:
+        return None
+    
+    result = []
+    for tool in tools:
+        # Extract function definition
+        if "type" in tool and "function" in tool:
+            func_def = tool["function"].copy()
+        else:
+            func_def = tool.copy()
+        
+        # Ensure parameters is not None (OpenAI API requirement)
+        if func_def.get("parameters") is None:
+            func_def["parameters"] = {"type": "object", "properties": {}}
+        
+        # Wrap in OpenAI format
+        result.append({"type": "function", "function": func_def})
+    
+    return result
 
 
 class StreamResponse:
