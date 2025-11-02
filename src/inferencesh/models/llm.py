@@ -33,6 +33,10 @@ class ContextMessage(BaseAppInput):
         description="the image file of the message",
         default=None
     )
+    images: Optional[List[File]] = Field(
+        description="the images of the message",
+        default=None
+    )
     tool_calls: Optional[List[Dict[str, Any]]] = Field(
         description="the tool calls of the message",
         default=None
