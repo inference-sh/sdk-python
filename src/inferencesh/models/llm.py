@@ -267,10 +267,20 @@ def build_messages(
 
     def merge_messages(messages: List[ContextMessage]) -> ContextMessage:
         text = "\n\n".join(msg.text for msg in messages if msg.text)
-        images = [msg.image for msg in messages if msg.image]
-        images.extend([msg.images for msg in messages if msg.images])
+        images = []
+        # Collect single images
+        for msg in messages:
+            if msg.image:
+                images.append(msg.image)
+        # Collect multiple images (flatten the list)
+        for msg in messages:
+            if msg.images:
+                images.extend(msg.images)
+        # Set image to single File if there's exactly one, otherwise None
         image = images[0] if len(images) == 1 else None
-        return ContextMessage(role=messages[0].role, text=text, image=image, images=images)
+        # Set images to the list if there are multiple, otherwise None
+        images_list = images if len(images) > 1 else None
+        return ContextMessage(role=messages[0].role, text=text, image=image, images=images_list)
     
     def merge_tool_calls(messages: List[ContextMessage]) -> List[Dict[str, Any]]:
         tool_calls = []
