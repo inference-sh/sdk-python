@@ -82,6 +82,13 @@ class ImageCapabilityMixin(BaseModel):
         default=None,
         contentMediaType="image/*",
     )
+    
+class MultipleImageCapabilityMixin(BaseModel):
+    """Mixin for models that support image inputs."""
+    images: Optional[List[File]] = Field(
+        description="the images to use for the model",
+        default=None,
+    )
 
 class ReasoningCapabilityMixin(BaseModel):
     """Mixin for models that support reasoning."""
@@ -235,6 +242,13 @@ def build_messages(
                 parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
             elif msg.image.uri:
                 parts.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
+        if msg.images:
+            for image in msg.images:
+                if image.path:
+                    image_data_uri = image_to_base64_data_uri(image.path)
+                    parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
+                elif image.uri:
+                    parts.append({"type": "image_url", "image_url": {"url": image.uri}})
         if allow_multipart:
             return parts
         if len(parts) == 1 and parts[0]["type"] == "text":
@@ -368,6 +382,13 @@ def build_tools(tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str
         # Also ensure properties within parameters is not None
         elif func_def["parameters"].get("properties") is None:
             func_def["parameters"]["properties"] = {}
+        else:
+            # Remove properties with null values (OpenAI API doesn't accept them)
+            properties = func_def["parameters"].get("properties", {})
+            if properties:
+                func_def["parameters"]["properties"] = {
+                    k: v for k, v in properties.items() if v is not None
+                }
         
         # Wrap in OpenAI format
         result.append({"type": "function", "function": func_def})
