@@ -268,8 +268,9 @@ def build_messages(
     def merge_messages(messages: List[ContextMessage]) -> ContextMessage:
         text = "\n\n".join(msg.text for msg in messages if msg.text)
         images = [msg.image for msg in messages if msg.image]
-        image = images[0] if images else None # TODO: handle multiple images
-        return ContextMessage(role=messages[0].role, text=text, image=image)
+        images.extend([msg.images for msg in messages if msg.images])
+        image = images[0] if len(images) == 1 else None
+        return ContextMessage(role=messages[0].role, text=text, image=image, images=images)
     
     def merge_tool_calls(messages: List[ContextMessage]) -> List[Dict[str, Any]]:
         tool_calls = []
@@ -287,10 +288,15 @@ def build_messages(
     if hasattr(input_data, "image"):
         user_input_image = input_data.image
         multipart = multipart or input_data.image is not None
+        
+    user_input_images = None
+    if hasattr(input_data, "images"):
+        user_input_images = input_data.images
+        multipart = multipart or input_data.images is not None
 
     input_role = input_data.role if hasattr(input_data, "role") else ContextMessageRole.USER
     input_tool_call_id = input_data.tool_call_id if hasattr(input_data, "tool_call_id") else None
-    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image, tool_call_id=input_tool_call_id)
+    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image, images=user_input_images, tool_call_id=input_tool_call_id)
 
     input_data.context.append(user_msg)
 
