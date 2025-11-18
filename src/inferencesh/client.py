@@ -167,6 +167,7 @@ class StreamManager:
         on_start: Optional[Callable[[], None]] = None,
         on_stop: Optional[Callable[[], None]] = None,
         on_data: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_partial_data: Optional[Callable[[Dict[str, Any], list[str]], None]] = None,
     ) -> None:
         self._create_event_source = create_event_source
         self._auto_reconnect = auto_reconnect
@@ -176,6 +177,7 @@ class StreamManager:
         self._on_start = on_start
         self._on_stop = on_stop
         self._on_data = on_data
+        self._on_partial_data = on_partial_data
 
         self._stopped = False
         self._reconnect_attempts = 0
@@ -199,11 +201,29 @@ class StreamManager:
                         if self._stopped:
                             break
                         self._had_successful_connection = True
-                        if self._on_data:
+                        
+                        # Handle generic messages through on_data callback
+                        # Try parsing as {data: T, fields: []} structure first
+                        print(f"  {data}")
+                        if (
+                            isinstance(data, dict)
+                            and "data" in data
+                            and "fields" in data
+                            and isinstance(data.get("fields"), list)
+                        ):
+                            # Partial data structure detected
+                            if self._on_partial_data:
+                                self._on_partial_data(data["data"], data["fields"])
+                            elif self._on_data:
+                                # Fall back to on_data with just the data if on_partial_data not provided
+                                self._on_data(data["data"])
+                        elif self._on_data:
+                            # Otherwise treat the whole thing as data
                             self._on_data(data)
-                            # Check again after processing in case on_data stopped us
-                            if self._stopped:
-                                break
+                        
+                        # Check again after processing in case callbacks stopped us
+                        if self._stopped:
+                            break
                 finally:
                     # Clean up the event source if it has a close method
                     try:
@@ -565,6 +585,16 @@ class Inference:
         try:
             for evt in self._iter_sse(resp):
                 try:
+                    # Handle generic messages - try parsing as {data: T, fields: []} structure first
+                    if (
+                        isinstance(evt, dict)
+                        and "data" in evt
+                        and "fields" in evt
+                        and isinstance(evt.get("fields"), list)
+                    ):
+                        # Partial data structure detected - extract just the data part
+                        evt = evt["data"]
+                    
                     # Process the event to check for completion/errors
                     result = _process_stream_event(
                         evt,

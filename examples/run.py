@@ -22,7 +22,6 @@ def run_with_updates() -> None:
             status_name = TaskStatus(status).name if status is not None else "UNKNOWN"
             
             # Print all available info
-            print("\nUpdate received:")
             print(f"  Status: {status_name}")
             if update.get("logs"):
                 print(f"  Logs: {update['logs']}")
@@ -71,5 +70,5 @@ def run_simple() -> None:
 
 if __name__ == "__main__":
     # Choose which example to run:
-    # run_with_updates()  # Shows streaming updates
-    run_simple()      # Shows simple synchronous usage
+    run_with_updates()  # Shows streaming updates
+    # run_simple()      # Shows simple synchronous usage
