@@ -227,7 +227,7 @@ def image_to_base64_data_uri(file_path):
         if file_extension == "png":
             content_type = "png"
         elif file_extension == "jpg":
-            content_type = "jpg"
+            content_type = "jpeg"
         elif file_extension == "jpeg":
             content_type = "jpeg"
         elif file_extension == "gif":
