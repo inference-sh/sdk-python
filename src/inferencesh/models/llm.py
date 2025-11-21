@@ -29,6 +29,10 @@ class ContextMessage(BaseAppInput):
     text: str = Field(
         description="the text content of the message"
     )
+    reasoning: Optional[str] = Field(
+        description="the reasoning content of the message",
+        default=None
+    )
     image: Optional[File] = Field(
         description="the image file of the message",
         default=None
