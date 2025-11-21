@@ -375,6 +375,10 @@ def build_messages(
                     
             if msg.reasoning:
                 msg_dict["reasoning"] = msg.reasoning
+                msg_dict["reasoning_details"] = {
+                    "type": "reasoning.text",
+                    "text": msg.reasoning
+                }
             
             messages.append(msg_dict)
             current_messages = [msg]
