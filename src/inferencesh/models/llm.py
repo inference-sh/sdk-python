@@ -248,7 +248,8 @@ def image_to_base64_data_uri(file_path):
 
 def build_messages(
     input_data: LLMInput,
-    transform_user_message: Optional[Callable[[str], str]] = None
+    transform_user_message: Optional[Callable[[str], str]] = None,
+    include_reasoning: bool = False
 ) -> List[Dict[str, Any]]:
     """Build messages for LLaMA.cpp chat completion.
 
@@ -374,7 +375,7 @@ def build_messages(
                     # If not provided, use empty string to satisfy schema
                     msg_dict["tool_call_id"] = ""
                     
-            if msg.reasoning:
+            if msg.reasoning and include_reasoning:
                 msg_dict["reasoning"] = msg.reasoning
                 msg_dict["reasoning_details"] = {
                     "type": "reasoning.text",
