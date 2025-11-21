@@ -343,6 +343,7 @@ def build_messages(
     current_role = None
     current_messages = []
     
+    reasoning_index = 0
     for msg in input_data.context:
         if msg.role == current_role or current_role is None:
             current_messages.append(msg)
@@ -377,8 +378,11 @@ def build_messages(
                 msg_dict["reasoning"] = msg.reasoning
                 msg_dict["reasoning_details"] = {
                     "type": "reasoning.text",
-                    "text": msg.reasoning
+                    "text": msg.reasoning,
+                    "id": f"reasoning-text-{reasoning_index}",
+                    "index": reasoning_index
                 }
+                reasoning_index += 1
             
             messages.append(msg_dict)
             current_messages = [msg]
