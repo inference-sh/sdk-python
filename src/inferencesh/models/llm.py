@@ -258,16 +258,20 @@ def build_messages(
     def render_message(msg: ContextMessage, allow_multipart: bool) -> str | List[dict]:
         parts = []
         text = transform_user_message(msg.text) if transform_user_message and msg.role == ContextMessageRole.USER else msg.text
+        
+        
         if text:
             parts.append({"type": "text", "text": text})
         else:
             parts.append({"type": "text", "text": ""})
+            
         if msg.image:
             if msg.image.path:
                 image_data_uri = image_to_base64_data_uri(msg.image.path)
                 parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
             elif msg.image.uri:
                 parts.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
+                
         if msg.images:
             for image in msg.images:
                 if image.path:
@@ -275,14 +279,18 @@ def build_messages(
                     parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
                 elif image.uri:
                     parts.append({"type": "image_url", "image_url": {"url": image.uri}})
+                    
         if allow_multipart:
             return parts
+        
         if len(parts) == 1 and parts[0]["type"] == "text":
             return parts[0]["text"]
+        
         if len(parts) > 1:
             if parts.any(lambda x: x["type"] == "image_url"):
                 raise ValueError("Image content requires multipart support")
             return parts
+        
         raise ValueError("Invalid message content")
 
     messages = [{"role": "system", "content": input_data.system_prompt}] if input_data.system_prompt is not None and input_data.system_prompt != "" else []
@@ -364,6 +372,9 @@ def build_messages(
                 else:
                     # If not provided, use empty string to satisfy schema
                     msg_dict["tool_call_id"] = ""
+                    
+            if msg.reasoning:
+                msg_dict["reasoning"] = msg.reasoning
             
             messages.append(msg_dict)
             current_messages = [msg]
