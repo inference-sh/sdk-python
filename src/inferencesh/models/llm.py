@@ -155,6 +155,13 @@ class ToolCallsMixin(BaseModel):
         description="tool calls for function calling",
         default=None
     )
+    
+class ImagesMixin(BaseModel):
+    """Mixin for models that support image outputs."""
+    images: Optional[List[File]] = Field(
+        description="the images of the output",
+        default=None
+    )
 
 # Example of how to use:
 class LLMOutput(LLMUsageMixin, BaseLLMOutput):
