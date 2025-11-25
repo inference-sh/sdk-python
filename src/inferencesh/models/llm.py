@@ -453,14 +453,7 @@ def build_tools(tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str
                 }
         
         # Wrap in OpenAI format
-        tool_def = {
-            "type": "function",
-            "function": func_def
-        }
-        if "description" in tool_def:
-            tool_def["description"] = tool_def["description"]
-
-        result.append(tool_def)
+        result.append({"type": "function", "function": func_def})
     
     return result
 
