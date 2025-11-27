@@ -33,12 +33,12 @@ class ContextMessage(BaseAppInput):
         description="the reasoning content of the message",
         default=None
     )
-    image: Optional[File] = Field(
-        description="the image file of the message",
-        default=None
-    )
     images: Optional[List[File]] = Field(
         description="the images of the message",
+        default=None
+    )
+    files: Optional[List[File]] = Field(
+        description="the files of the message",
         default=None
     )
     tool_calls: Optional[List[Dict[str, Any]]] = Field(
@@ -85,14 +85,6 @@ class BaseLLMInput(BaseAppInput):
 
 class ImageCapabilityMixin(BaseModel):
     """Mixin for models that support image inputs."""
-    image: Optional[File] = Field(
-        description="the image to use for the model",
-        default=None,
-        contentMediaType="image/*",
-    )
-    
-class MultipleImageCapabilityMixin(BaseModel):
-    """Mixin for models that support image inputs."""
     images: Optional[List[File]] = Field(
         description="the images to use for the model",
         default=None,
@@ -100,13 +92,6 @@ class MultipleImageCapabilityMixin(BaseModel):
     
 class FileCapabilityMixin(BaseModel):
     """Mixin for models that support file inputs."""
-    file: Optional[File] = Field(
-        description="the file to use for the model",
-        default=None,
-    )
-
-class MultipleFileCapabilityMixin(BaseModel):
-    """Mixin for models that support multiple file inputs."""
     files: Optional[List[File]] = Field(
         description="the files to use for the model",
         default=None,
@@ -162,7 +147,6 @@ class LLMUsage(BaseAppOutput):
     total_tokens: int = 0
     reasoning_tokens: int = 0
     reasoning_time: float = 0.0
-
 
 class BaseLLMOutput(BaseAppOutput):
     """Base class for LLM outputs with common fields."""
@@ -304,13 +288,6 @@ def build_messages(
         else:
             parts.append({"type": "text", "text": ""})
             
-        if msg.image:
-            if msg.image.path:
-                image_data_uri = image_to_base64_data_uri(msg.image.path)
-                parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
-            elif msg.image.uri:
-                parts.append({"type": "image_url", "image_url": {"url": msg.image.uri}})
-                
         if msg.images:
             for image in msg.images:
                 if image.path:
@@ -319,13 +296,6 @@ def build_messages(
                 elif image.uri:
                     parts.append({"type": "image_url", "image_url": {"url": image.uri}})
                     
-        if msg.file:
-            if msg.file.path:
-                file_data_uri = file_to_base64_data_uri(msg.file.path)
-                parts.append({"type": "file_url", "file_url": {"url": file_data_uri}})
-            elif msg.file.uri:
-                parts.append({"type": "file_url", "file_url": {"url": msg.file.uri}})
-            
         if msg.files:
             for file in msg.files:
                 if file.path:
@@ -355,19 +325,16 @@ def build_messages(
     def merge_messages(messages: List[ContextMessage]) -> ContextMessage:
         text = "\n\n".join(msg.text for msg in messages if msg.text)
         images = []
-        # Collect single images
-        for msg in messages:
-            if msg.image:
-                images.append(msg.image)
-        # Collect multiple images (flatten the list)
+        files = []
         for msg in messages:
             if msg.images:
-                images.extend(msg.images)
-        # Set image to single File if there's exactly one, otherwise None
-        image = images[0] if len(images) == 1 else None
-        # Set images to the list if there are multiple, otherwise None
+                images.extend(msg.images)         
+            if msg.files:
+                files.extend(msg.files)
+
         images_list = images if len(images) > 1 else None
-        return ContextMessage(role=messages[0].role, text=text, image=image, images=images_list)
+        files_list = files if len(files) > 1 else None
+        return ContextMessage(role=messages[0].role, text=text, images=images_list, files=files_list)
     
     def merge_tool_calls(messages: List[ContextMessage]) -> List[Dict[str, Any]]:
         tool_calls = []
@@ -380,35 +347,23 @@ def build_messages(
     if hasattr(input_data, "text"):
         user_input_text = transform_user_message(input_data.text) if transform_user_message else input_data.text
         
-    user_input_image = None
-    multipart = any(m.image for m in input_data.context)
-    if hasattr(input_data, "image"):
-        user_input_image = input_data.image
-        multipart = multipart or input_data.image is not None
-        
     user_input_images = None
     if hasattr(input_data, "images"):
         user_input_images = input_data.images
-        multipart = multipart or input_data.images is not None
-
-    user_input_file = None
-    if hasattr(input_data, "file"):
-        user_input_file = input_data.file
-        multipart = multipart or input_data.file is not None
 
     user_input_files = None
     if hasattr(input_data, "files"):
         user_input_files = input_data.files
-        multipart = multipart or input_data.files is not None
 
     user_input_reasoning = None
     if hasattr(input_data, "reasoning"):
         user_input_reasoning = input_data.reasoning
-        multipart = multipart or input_data.reasoning is not None
+        
+    multipart = any(m.images or m.files or m.reasoning for m in input_data.context)
 
     input_role = input_data.role if hasattr(input_data, "role") else ContextMessageRole.USER
     input_tool_call_id = input_data.tool_call_id if hasattr(input_data, "tool_call_id") else None
-    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image, images=user_input_images, file=user_input_file, files=user_input_files, reasoning=user_input_reasoning, tool_call_id=input_tool_call_id)
+    user_msg = ContextMessage(role=input_role, text=user_input_text, images=user_input_images, files=user_input_files, reasoning=user_input_reasoning, tool_call_id=input_tool_call_id)
 
     input_data.context.append(user_msg)
 
