@@ -97,12 +97,41 @@ class MultipleImageCapabilityMixin(BaseModel):
         description="the images to use for the model",
         default=None,
     )
+    
+class FileCapabilityMixin(BaseModel):
+    """Mixin for models that support file inputs."""
+    file: Optional[File] = Field(
+        description="the file to use for the model",
+        default=None,
+    )
+
+class MultipleFileCapabilityMixin(BaseModel):
+    """Mixin for models that support multiple file inputs."""
+    files: Optional[List[File]] = Field(
+        description="the files to use for the model",
+        default=None,
+    )
+    
+class ReasoningEffortEnum(str, Enum):
+    """Enum for reasoning effort."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    NONE = "none"
 
 class ReasoningCapabilityMixin(BaseModel):
     """Mixin for models that support reasoning."""
-    reasoning: bool = Field(
+    reasoning: str | None = Field(
+        description="the reasoning input of the message",
+        default=None
+    )
+    reasoning_effort: ReasoningEffortEnum = Field(
         description="enable step-by-step reasoning",
-        default=False
+        default=ReasoningEffortEnum.NONE
+    )
+    reasoning_max_tokens: int | None = Field(
+        description="the maximum number of tokens to use for reasoning",
+        default=None
     )
 
 class ToolsCapabilityMixin(BaseModel):
@@ -246,6 +275,15 @@ def image_to_base64_data_uri(file_path):
 
         return f"data:image/{content_type};base64,{base64_data}"
 
+def file_to_base64_data_uri(file_path):
+    with open(file_path, "rb") as file:
+        base64_data = base64.b64encode(file.read()).decode('utf-8')
+        file_extension = file_path.split(".")[-1]
+        content_type = "application/octet-stream"
+        if file_extension == "pdf":
+            content_type = "application/pdf"
+        return f"data:{content_type};base64,{base64_data}"
+
 def build_messages(
     input_data: LLMInput,
     transform_user_message: Optional[Callable[[str], str]] = None,
@@ -280,6 +318,24 @@ def build_messages(
                     parts.append({"type": "image_url", "image_url": {"url": image_data_uri}})
                 elif image.uri:
                     parts.append({"type": "image_url", "image_url": {"url": image.uri}})
+                    
+        if msg.file:
+            if msg.file.path:
+                file_data_uri = file_to_base64_data_uri(msg.file.path)
+                parts.append({"type": "file_url", "file_url": {"url": file_data_uri}})
+            elif msg.file.uri:
+                parts.append({"type": "file_url", "file_url": {"url": msg.file.uri}})
+            
+        if msg.files:
+            for file in msg.files:
+                if file.path:
+                    file_data_uri = file_to_base64_data_uri(file.path)
+                    parts.append({"type": "file_url", "file_url": {"url": file_data_uri}})
+                elif file.uri:
+                    parts.append({"type": "file_url", "file_url": {"url": file.uri}})
+                
+        if msg.reasoning:
+            parts.append({"type": "reasoning", "reasoning": msg.reasoning})
                     
         if allow_multipart:
             return parts
@@ -335,9 +391,24 @@ def build_messages(
         user_input_images = input_data.images
         multipart = multipart or input_data.images is not None
 
+    user_input_file = None
+    if hasattr(input_data, "file"):
+        user_input_file = input_data.file
+        multipart = multipart or input_data.file is not None
+
+    user_input_files = None
+    if hasattr(input_data, "files"):
+        user_input_files = input_data.files
+        multipart = multipart or input_data.files is not None
+
+    user_input_reasoning = None
+    if hasattr(input_data, "reasoning"):
+        user_input_reasoning = input_data.reasoning
+        multipart = multipart or input_data.reasoning is not None
+
     input_role = input_data.role if hasattr(input_data, "role") else ContextMessageRole.USER
     input_tool_call_id = input_data.tool_call_id if hasattr(input_data, "tool_call_id") else None
-    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image, images=user_input_images, tool_call_id=input_tool_call_id)
+    user_msg = ContextMessage(role=input_role, text=user_input_text, image=user_input_image, images=user_input_images, file=user_input_file, files=user_input_files, reasoning=user_input_reasoning, tool_call_id=input_tool_call_id)
 
     input_data.context.append(user_msg)
 
