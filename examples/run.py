@@ -1,74 +1,135 @@
-from inferencesh import Inference, TaskStatus  # type: ignore
+"""Real API test for sync and async clients."""
+import asyncio
+from inferencesh import Inference, AsyncInference, TaskStatus
+
+API_KEY = "1nfsh-7yxm9j9mdpkkpsab2dxtnddxft"
+
+TASK_PARAMS = {
+    "app": "infsh/text-templating",
+    "input": {
+        "template": "hello {1}",
+        "strings": ["world"]
+    },
+    "infra": "cloud",
+    "variant": "default"
+}
 
 
-def run_with_updates() -> None:
-    """Example showing how to get streaming updates."""
-    api_key = "1nfsh-7yxm9j9mdpkkpsab2dxtnddxft"
-    client = Inference(api_key=api_key, base_url="https://api.inference.sh")
-
-    try:
-        # Run with stream=True to get updates
-        for update in client.run(
-            {
-                "app": "infsh/glm-45-air",
-                "input": {"text": "lolo"},
-                "infra": "cloud",
-                "variant": "default"
-            },
-            stream=True  # Enable streaming updates
-        ):
-            # Print detailed update info
-            status = update.get("status")
-            status_name = TaskStatus(status).name if status is not None else "UNKNOWN"
-            
-            # Print all available info
-            print(f"  Status: {status_name}")
-            if update.get("logs"):
-                print(f"  Logs: {update['logs']}")
-            if update.get("progress"):
-                print(f"  Progress: {update['progress']}")
-            if update.get("metrics"):
-                print(f"  Metrics: {update['metrics']}")
-            
-            # Handle completion states
+def test_sync():
+    """Test synchronous client."""
+    print("=" * 50)
+    print("SYNC CLIENT TEST")
+    print("=" * 50)
+    
+    client = Inference(api_key=API_KEY)
+    
+    # Test 1: Run and wait (default)
+    print("\n1. run() - wait for completion (default)")
+    task = client.run(TASK_PARAMS)
+    print(f"   Task ID: {task['id']}")
+    print(f"   Status: {TaskStatus(task['status']).name}")
+    if task["status"] == TaskStatus.COMPLETED:
+        print(f"   Output: {task['output']}")
+    
+    # Test 2: Run with wait=False
+    print("\n2. run(wait=False) - return immediately")
+    task = client.run(TASK_PARAMS, wait=False)
+    print(f"   Task ID: {task['id']}")
+    print(f"   Status: {TaskStatus(task['status']).name}")
+    
+    # Test 3: get_task
+    print(f"\n3. get_task('{task['id']}')")
+    task_info = client.get_task(task["id"])
+    print(f"   Status: {TaskStatus(task_info['status']).name}")
+    
+    # Test 4: Stream updates
+    print("\n4. run(stream=True) - stream updates")
+    for update in client.run(TASK_PARAMS, stream=True):
+        status = update.get('status')
+        if status is not None:
+            status_name = TaskStatus(status).name
+            print(f"   Status: {status_name}")
             if status == TaskStatus.COMPLETED:
-                print("\n✓ Task completed!")
-                print(f"Output: {update.get('output')}")
+                print(f"   Output: {update.get('output')}")
                 break
-            elif status == TaskStatus.FAILED:
-                print(f"\n✗ Task failed: {update.get('error')}")
+    
+    # Test 5: stream_task
+    print("\n5. stream_task() - stream existing task")
+    task = client.run(TASK_PARAMS, wait=False)
+    with client.stream_task(task["id"]) as stream:
+        for update in stream:
+            status = update.get('status')
+            if status is not None:
+                status_name = TaskStatus(status).name
+                print(f"   Status: {status_name}")
+                if status == TaskStatus.COMPLETED:
+                    print(f"   Output: {update.get('output')}")
+                    break
+    
+    print("\n✓ Sync client tests passed!")
+
+
+async def test_async():
+    """Test asynchronous client."""
+    print("\n" + "=" * 50)
+    print("ASYNC CLIENT TEST")
+    print("=" * 50)
+    
+    client = AsyncInference(api_key=API_KEY)
+    
+    # Test 1: Run and wait (default)
+    print("\n1. await run() - wait for completion (default)")
+    task = await client.run(TASK_PARAMS)
+    print(f"   Task ID: {task['id']}")
+    print(f"   Status: {TaskStatus(task['status']).name}")
+    if task["status"] == TaskStatus.COMPLETED:
+        print(f"   Output: {task['output']}")
+    
+    # Test 2: Run with wait=False
+    print("\n2. await run(wait=False) - return immediately")
+    task = await client.run(TASK_PARAMS, wait=False)
+    print(f"   Task ID: {task['id']}")
+    print(f"   Status: {TaskStatus(task['status']).name}")
+    
+    # Test 3: get_task
+    print(f"\n3. await get_task('{task['id']}')")
+    task_info = await client.get_task(task["id"])
+    print(f"   Status: {TaskStatus(task_info['status']).name}")
+    
+    # Test 4: Stream updates
+    print("\n4. async for in await run(stream=True)")
+    async for update in await client.run(TASK_PARAMS, stream=True):
+        status = update.get('status')
+        if status is not None:
+            status_name = TaskStatus(status).name
+            print(f"   Status: {status_name}")
+            if status == TaskStatus.COMPLETED:
+                print(f"   Output: {update.get('output')}")
                 break
-            elif status == TaskStatus.CANCELLED:
-                print("\n✗ Task was cancelled")
-                break
-
-    except Exception as exc:  # noqa: BLE001
-        print(f"\nError: {type(exc).__name__}: {exc}")
-        raise  # Re-raise to see full traceback
-
-
-def run_simple() -> None:
-    """Example showing simple synchronous usage."""
-    api_key = "1nfsh-7yxm9j9mdpkkpsab2dxtnddxft"
-    client = Inference(api_key=api_key, base_url="https://api-dev.inference.sh")
-
-    try:
-        # Simple synchronous run - waits for completion by default
-        result = client.run({
-            "app": "lginf/llm-router",
-            "input": {"image": "https://storage.googleapis.com/folip-api-images/images/rGF6LfQuGQUEox9YF3JkuOiITUm1/dc4c0e18cb7a4f669bc6b6f3b99e6147.png"},
-            "infra": "cloud",
-            "variant": "default"
-        })
-        
-        print(f"Task completed! Output: {result['output']}")
-
-    except Exception as exc:  # noqa: BLE001
-        print(f"\nError: {type(exc).__name__}: {exc}")
-        raise  # Re-raise to see full traceback
+    
+    # Test 5: stream_task
+    print("\n5. async with stream_task()")
+    task = await client.run(TASK_PARAMS, wait=False)
+    async with client.stream_task(task["id"]) as stream:
+        async for update in stream:
+            status = update.get('status')
+            if status is not None:
+                status_name = TaskStatus(status).name
+                print(f"   Status: {status_name}")
+                if status == TaskStatus.COMPLETED:
+                    print(f"   Output: {update.get('output')}")
+                    break
+    
+    print("\n✓ Async client tests passed!")
 
 
 if __name__ == "__main__":
-    # Choose which example to run:
-    run_with_updates()  # Shows streaming updates
-    # run_simple()      # Shows simple synchronous usage
+    # Run sync tests
+    test_sync()
+    
+    # Run async tests
+    asyncio.run(test_async())
+    
+    print("\n" + "=" * 50)
+    print("ALL TESTS PASSED!")
+    print("=" * 50)

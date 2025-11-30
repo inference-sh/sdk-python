@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Callable, Generator, Union, Iterator
+from typing import Any, Dict, Optional, Callable, Generator, Union, Iterator, AsyncIterator
 from dataclasses import dataclass
 from enum import IntEnum
 import json
@@ -8,7 +8,7 @@ import re
 import time
 import mimetypes
 import os
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, AbstractAsyncContextManager
 from typing import Protocol, runtime_checkable
 
 
@@ -77,6 +77,85 @@ class TaskStream(AbstractContextManager['TaskStream']):
         """
         try:
             for update in self.client._stream_updates(
+                self.task_id,
+                self.task,
+            ):
+                if isinstance(update, Exception):
+                    self._error = update
+                    raise update
+                if update.get("status") == TaskStatus.COMPLETED:
+                    self._final_task = update
+                yield update
+        except Exception as exc:
+            self._error = exc
+            raise
+
+
+class AsyncTaskStream(AbstractAsyncContextManager['AsyncTaskStream']):
+    """An async context manager for streaming task updates.
+    
+    This class provides a Pythonic interface for handling streaming updates from a task.
+    It can be used either as an async context manager or as an async iterator.
+    
+    Example:
+        ```python
+        # As an async context manager
+        async with client.stream_task(task_id) as stream:
+            async for update in stream:
+                print(f"Update: {update}")
+                
+        # As an async iterator
+        async for update in client.stream_task(task_id):
+            print(f"Update: {update}")
+        ```
+    """
+    def __init__(
+        self,
+        task: Dict[str, Any],
+        client: Any,
+        auto_reconnect: bool = True,
+        max_reconnects: int = 5,
+        reconnect_delay_ms: int = 1000,
+    ):
+        self.task = task
+        self.client = client
+        self.task_id = task["id"]
+        self.auto_reconnect = auto_reconnect
+        self.max_reconnects = max_reconnects
+        self.reconnect_delay_ms = reconnect_delay_ms
+        self._final_task: Optional[Dict[str, Any]] = None
+        self._error: Optional[Exception] = None
+        
+    async def __aenter__(self) -> 'AsyncTaskStream':
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        pass
+        
+    def __aiter__(self) -> AsyncIterator[Dict[str, Any]]:
+        return self.stream()
+        
+    @property
+    def result(self) -> Optional[Dict[str, Any]]:
+        """The final task result if completed, None otherwise."""
+        return self._final_task
+        
+    @property
+    def error(self) -> Optional[Exception]:
+        """The error that occurred during streaming, if any."""
+        return self._error
+        
+    async def stream(self) -> AsyncIterator[Dict[str, Any]]:
+        """Stream updates for this task.
+        
+        Yields:
+            Dict[str, Any]: Task update events
+            
+        Raises:
+            RuntimeError: If the task fails or is cancelled
+        """
+        try:
+            async for update in self.client._stream_updates(
                 self.task_id,
                 self.task,
             ):
@@ -793,26 +872,26 @@ class AsyncInference:
         auto_reconnect: bool = True,
         max_reconnects: int = 5,
         reconnect_delay_ms: int = 1000,
-    ) -> Union[Dict[str, Any], TaskStream, Iterator[Dict[str, Any]]]:
+    ) -> Union[Dict[str, Any], AsyncTaskStream]:
         """Run a task with optional streaming updates.
         
         By default, this method waits for the task to complete and returns the final result.
-        You can set wait=False to get just the task info, or stream=True to get an iterator
+        You can set wait=False to get just the task info, or stream=True to get an async iterator
         of status updates.
         
         Args:
             params: Task parameters to pass to the API
             wait: Whether to wait for task completion (default: True)
-            stream: Whether to return an iterator of updates (default: False)
+            stream: Whether to return an async iterator of updates (default: False)
             auto_reconnect: Whether to automatically reconnect on connection loss
             max_reconnects: Maximum number of reconnection attempts
             reconnect_delay_ms: Delay between reconnection attempts in milliseconds
             
         Returns:
-            Union[Dict[str, Any], TaskStream, Iterator[Dict[str, Any]]]:
+            Union[Dict[str, Any], AsyncTaskStream]:
                 - If wait=True and stream=False: The completed task data
                 - If wait=False: The created task info
-                - If stream=True: An iterator of task updates
+                - If stream=True: An async iterator of task updates
             
         Example:
             ```python
@@ -825,8 +904,7 @@ class AsyncInference:
             task_id = task["id"]
             
             # Stream updates
-            stream = await client.run(params, stream=True)
-            for update in stream:
+            async for update in await client.run(params, stream=True):
                 print(f"Status: {update.get('status')}")
                 if update.get('status') == TaskStatus.COMPLETED:
                     print(f"Result: {update.get('output')}")
@@ -838,18 +916,17 @@ class AsyncInference:
         
         # Return immediately if not waiting
         if not wait and not stream:
-            return task
+            return _strip_task(task)
             
         # Return stream if requested
         if stream:
-            task_stream = TaskStream(
+            return AsyncTaskStream(
                 task=task,
                 client=self,
                 auto_reconnect=auto_reconnect,
                 max_reconnects=max_reconnects,
                 reconnect_delay_ms=reconnect_delay_ms,
             )
-            return task_stream
             
         # Otherwise wait for completion
         return await self.wait_for_completion(task["id"])
@@ -871,7 +948,7 @@ class AsyncInference:
     async def wait_for_completion(self, task_id: str) -> Dict[str, Any]:
         """Wait for a task to complete and return its final state.
         
-        This method polls the task status until it reaches a terminal state
+        This method streams the task status until it reaches a terminal state
         (completed, failed, or cancelled).
         
         Args:
@@ -883,7 +960,7 @@ class AsyncInference:
         Raises:
             RuntimeError: If the task fails or is cancelled
         """
-        with self.stream_task(task_id) as stream:
+        async with self.stream_task(task_id) as stream:
             async for update in stream:
                 if update.get("status") == TaskStatus.COMPLETED:
                     return update
@@ -892,6 +969,56 @@ class AsyncInference:
                 elif update.get("status") == TaskStatus.CANCELLED:
                     raise RuntimeError("Task cancelled")
         raise RuntimeError("Stream ended without completion")
+
+    def stream_task(
+        self,
+        task_id: str,
+        *,
+        auto_reconnect: bool = True,
+        max_reconnects: int = 5,
+        reconnect_delay_ms: int = 1000,
+    ) -> AsyncTaskStream:
+        """Create an AsyncTaskStream for getting streaming updates from a task.
+        
+        This provides a Pythonic interface for handling task updates.
+        The returned AsyncTaskStream can be used either as an async context manager 
+        or as an async iterator.
+        
+        Args:
+            task_id: The ID of the task to stream
+            auto_reconnect: Whether to automatically reconnect on connection loss
+            max_reconnects: Maximum number of reconnection attempts
+            reconnect_delay_ms: Delay between reconnection attempts in milliseconds
+            
+        Returns:
+            AsyncTaskStream: An async stream interface for the task
+            
+        Example:
+            ```python
+            # Run a task
+            task = await client.run(params, wait=False)
+            
+            # Stream updates using async context manager
+            async with client.stream_task(task["id"]) as stream:
+                async for update in stream:
+                    print(f"Status: {update.get('status')}")
+                    if update.get("status") == TaskStatus.COMPLETED:
+                        print(f"Result: {update.get('output')}")
+                        
+            # Or use as a simple async iterator
+            async for update in client.stream_task(task["id"]):
+                print(f"Update: {update}")
+            ```
+        """
+        # Create a minimal task dict with just the id for streaming
+        task = {"id": task_id}
+        return AsyncTaskStream(
+            task=task,
+            client=self,
+            auto_reconnect=auto_reconnect,
+            max_reconnects=max_reconnects,
+            reconnect_delay_ms=reconnect_delay_ms,
+        )
 
     # --------------- File upload ---------------
     async def upload_file(self, data: Union[str, bytes], options: Optional[UploadFileOptions] = None) -> Dict[str, Any]:
@@ -986,7 +1113,53 @@ class AsyncInference:
 
         return input_value
 
-    async def _aiter_sse(self, resp: Any) -> Generator[Dict[str, Any], None, None]:
+    async def _stream_updates(
+        self,
+        task_id: str,
+        task: Dict[str, Any],
+    ) -> AsyncIterator[Union[Dict[str, Any], Exception]]:
+        """Internal method to stream task updates asynchronously."""
+        aiohttp = await _require_aiohttp()
+        url = f"{self._base_url}/tasks/{task_id}/stream"
+        headers = {
+            **self._headers(),
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Accept-Encoding": "identity",
+            "Connection": "keep-alive",
+        }
+        timeout_cfg = aiohttp.ClientTimeout(total=60)
+        
+        async with aiohttp.ClientSession(timeout=timeout_cfg) as session:
+            async with session.get(url, headers=headers) as resp:
+                async for evt in self._aiter_sse(resp):
+                    try:
+                        # Handle generic messages - try parsing as {data: T, fields: []} structure first
+                        if (
+                            isinstance(evt, dict)
+                            and "data" in evt
+                            and "fields" in evt
+                            and isinstance(evt.get("fields"), list)
+                        ):
+                            # Partial data structure detected - extract just the data part
+                            evt = evt["data"]
+                        
+                        # Process the event to check for completion/errors
+                        result = _process_stream_event(
+                            evt,
+                            task=task,
+                            stopper=None,  # We'll handle stopping via the iterator
+                        )
+                        if result is not None:
+                            yield result
+                            return
+                        yield _strip_task(evt)
+                    except Exception as exc:
+                        yield exc
+                        raise
+
+    async def _aiter_sse(self, resp: Any) -> AsyncIterator[Dict[str, Any]]:
+        """Iterate JSON events from an SSE response asynchronously."""
         async for raw_line in resp.content:  # type: ignore[attr-defined]
             try:
                 line = raw_line.decode().rstrip("\n")

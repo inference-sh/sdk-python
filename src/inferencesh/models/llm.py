@@ -82,6 +82,7 @@ class BaseLLMInput(BaseAppInput):
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
     top_p: float = Field(default=0.95, ge=0.0, le=1.0)
     context_size: int = Field(default=4096)
+    max_tokens: int = Field(default=64000)
 
 class ImageCapabilityMixin(BaseModel):
     """Mixin for models that support image inputs."""
