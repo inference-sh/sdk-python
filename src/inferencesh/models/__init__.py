@@ -12,6 +12,16 @@ from .llm import (
     stream_generate,
     timing_context,
 )
+from .output_meta import (
+    MetaItem,
+    MetaItemType,
+    TextMeta,
+    ImageMeta,
+    VideoMeta,
+    VideoResolution,
+    AudioMeta,
+    OutputMeta,
+)
 
 __all__ = [
     "BaseApp",
@@ -26,4 +36,13 @@ __all__ = [
     "build_messages",
     "stream_generate",
     "timing_context",
+    # OutputMeta types
+    "MetaItem",
+    "MetaItemType",
+    "TextMeta",
+    "ImageMeta",
+    "VideoMeta",
+    "VideoResolution",
+    "AudioMeta",
+    "OutputMeta",
 ] 

@@ -1,11 +1,11 @@
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 import inspect
 import ast
 import textwrap
 from collections import OrderedDict
 from inferencesh.models.file import File
-from pydantic import Field
+from inferencesh.models.output_meta import OutputMeta
 
 class Metadata(BaseModel):
     app_id: Optional[str] = None
@@ -88,7 +88,10 @@ class BaseAppInput(OrderedSchemaModel):
 
 
 class BaseAppOutput(OrderedSchemaModel):
-    pass
+    output_meta: Optional[OutputMeta] = Field(
+        default=None,
+        description="Structured metadata about inputs/outputs for pricing calculation"
+    )
 
 
 class BaseApp(BaseModel):
