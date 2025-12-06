@@ -11,6 +11,7 @@ class MetaItemType(str, Enum):
     IMAGE = "image"
     VIDEO = "video"
     AUDIO = "audio"
+    RAW = "raw"
 
 
 class VideoResolution(str, Enum):
@@ -75,6 +76,12 @@ class AudioMeta(MetaItem):
     type: str = MetaItemType.AUDIO.value
     seconds: float = Field(default=0, description="Duration in seconds")
     sample_rate: int = Field(default=0, description="Sample rate in Hz")
+    
+
+class RawMeta(MetaItem):
+    """Metadata for raw inputs/outputs used for custom pricing."""
+    type: str = MetaItemType.RAW.value
+    cost: float = Field(default=0, description="Cost in dollar cents")
 
 
 class OutputMeta(BaseModel):

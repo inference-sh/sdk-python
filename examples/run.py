@@ -2,7 +2,7 @@
 import asyncio
 from inferencesh import Inference, AsyncInference, TaskStatus
 
-API_KEY = "1nfsh-7yxm9j9mdpkkpsab2dxtnddxft"
+API_KEY = "1nfsh-47p5ztz7qzm6j32maygz51eqbx"
 
 TASK_PARAMS = {
     "app": "infsh/text-templating",
@@ -21,7 +21,7 @@ def test_sync():
     print("SYNC CLIENT TEST")
     print("=" * 50)
     
-    client = Inference(api_key=API_KEY)
+    client = Inference(api_key=API_KEY, base_url="https://api.inference.sh")
     
     # Test 1: Run and wait (default)
     print("\n1. run() - wait for completion (default)")
@@ -75,11 +75,11 @@ async def test_async():
     print("ASYNC CLIENT TEST")
     print("=" * 50)
     
-    client = AsyncInference(api_key=API_KEY)
+    client = AsyncInference(api_key=API_KEY, base_url="https://api.inference.sh")
     
     # Test 1: Run and wait (default)
     print("\n1. await run() - wait for completion (default)")
-    task = await client.run(TASK_PARAMS)
+    task = await client.run(TASK_PARAMS)    
     print(f"   Task ID: {task['id']}")
     print(f"   Status: {TaskStatus(task['status']).name}")
     if task["status"] == TaskStatus.COMPLETED:
