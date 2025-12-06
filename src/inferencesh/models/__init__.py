@@ -20,6 +20,7 @@ from .output_meta import (
     VideoMeta,
     VideoResolution,
     AudioMeta,
+    RawMeta,
     OutputMeta,
 )
 
@@ -44,5 +45,6 @@ __all__ = [
     "VideoMeta",
     "VideoResolution",
     "AudioMeta",
+    "RawMeta",
     "OutputMeta",
 ] 

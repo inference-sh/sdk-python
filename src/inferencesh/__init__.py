@@ -16,6 +16,18 @@ from .models import (
     stream_generate,
     timing_context,
 )
+from .models import (
+    MetaItem,
+    MetaItemType,
+    TextMeta,
+    ImageMeta,
+    VideoMeta,
+    VideoResolution,
+    AudioMeta,
+    RawMeta,
+    OutputMeta,
+)
+
 from .utils import StorageDir, download
 from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
 
@@ -38,4 +50,13 @@ __all__ = [
     "AsyncInference",
     "UploadFileOptions",
     "TaskStatus",
+    "MetaItem",
+    "MetaItemType",
+    "TextMeta",
+    "ImageMeta",
+    "VideoMeta",
+    "VideoResolution",
+    "AudioMeta",
+    "RawMeta",
+    "OutputMeta",
 ]
