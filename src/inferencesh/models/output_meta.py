@@ -1,6 +1,6 @@
 """Output metadata types for pricing and usage tracking."""
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -84,6 +84,10 @@ class RawMeta(MetaItem):
     cost: float = Field(default=0, description="Cost in dollar cents")
 
 
+# Union type for proper serialization of all MetaItem subclasses
+MetaItemUnion = Union[TextMeta, ImageMeta, VideoMeta, AudioMeta, RawMeta]
+
+
 class OutputMeta(BaseModel):
     """
     Structured metadata about task inputs and outputs for pricing calculation.
@@ -108,11 +112,11 @@ class OutputMeta(BaseModel):
             )]
         )
     """
-    inputs: List[MetaItem] = Field(
+    inputs: List[MetaItemUnion] = Field(
         default_factory=list,
         description="Metadata about consumed inputs"
     )
-    outputs: List[MetaItem] = Field(
+    outputs: List[MetaItemUnion] = Field(
         default_factory=list,
         description="Metadata about produced outputs"
     )
