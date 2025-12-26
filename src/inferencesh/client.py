@@ -11,6 +11,8 @@ import os
 from contextlib import AbstractContextManager, AbstractAsyncContextManager
 from typing import Protocol, runtime_checkable
 
+from .models.errors import APIError, RequirementsNotMetError
+
 
 class TaskStream(AbstractContextManager['TaskStream']):
     """A context manager for streaming task updates.
@@ -410,8 +412,42 @@ class Inference:
         )
         if stream:
             return resp
-        resp.raise_for_status()
-        payload = resp.json()
+        
+        # Get response text
+        response_text = resp.text
+        
+        # Try to parse as JSON
+        payload = None
+        try:
+            payload = json.loads(response_text) if response_text else None
+        except Exception:
+            pass
+        
+        # Check for HTTP errors first
+        if not resp.ok:
+            # Check for RequirementsNotMetError (412 with errors array)
+            if resp.status_code == 412 and payload and isinstance(payload, dict) and "errors" in payload:
+                raise RequirementsNotMetError.from_response(payload, resp.status_code)
+            
+            # General error handling
+            error_detail = None
+            if payload and isinstance(payload, dict):
+                if payload.get("error"):
+                    err = payload["error"]
+                    if isinstance(err, dict):
+                        error_detail = err.get("message") or json.dumps(err)
+                    else:
+                        error_detail = str(err)
+                elif payload.get("message"):
+                    error_detail = payload["message"]
+                else:
+                    # Include full payload if no standard error field
+                    error_detail = json.dumps(payload)
+            elif response_text:
+                error_detail = response_text[:500]
+            
+            raise APIError(resp.status_code, error_detail or "Request failed", response_text)
+        
         if not isinstance(payload, dict) or not payload.get("success", False):
             message = None
             if isinstance(payload, dict) and payload.get("error"):
@@ -420,7 +456,7 @@ class Inference:
                     message = err.get("message")
                 else:
                     message = str(err)
-            raise RuntimeError(message or "Request failed")
+            raise APIError(200, message or "Request failed", response_text)
         return payload.get("data")
 
     # --------------- Public API ---------------
@@ -850,7 +886,41 @@ class AsyncInference:
             ) as resp:
                 if expect_stream:
                     return resp
-                payload = await resp.json()
+                # Read response body as text first (can only read once)
+                response_text = await resp.text()
+                
+                # Try to parse as JSON
+                payload = None
+                try:
+                    payload = json.loads(response_text) if response_text else None
+                except Exception:
+                    pass
+                
+                # Check for HTTP errors first
+                if not resp.ok:
+                    # Check for RequirementsNotMetError (412 with errors array)
+                    if resp.status == 412 and payload and isinstance(payload, dict) and "errors" in payload:
+                        raise RequirementsNotMetError.from_response(payload, resp.status)
+                    
+                    # General error handling
+                    error_detail = None
+                    if payload and isinstance(payload, dict):
+                        if payload.get("error"):
+                            err = payload["error"]
+                            if isinstance(err, dict):
+                                error_detail = err.get("message") or json.dumps(err)
+                            else:
+                                error_detail = str(err)
+                        elif payload.get("message"):
+                            error_detail = payload["message"]
+                        else:
+                            # Include full payload if no standard error field
+                            error_detail = json.dumps(payload)
+                    elif response_text:
+                        error_detail = response_text[:500]
+                    
+                    raise APIError(resp.status, error_detail or "Request failed", response_text)
+                
                 if not isinstance(payload, dict) or not payload.get("success", False):
                     message = None
                     if isinstance(payload, dict) and payload.get("error"):
@@ -859,7 +929,7 @@ class AsyncInference:
                             message = err.get("message")
                         else:
                             message = str(err)
-                    raise RuntimeError(message or "Request failed")
+                    raise APIError(resp.status, message or "Request failed", response_text)
                 return payload.get("data")
 
     # --------------- Public API ---------------

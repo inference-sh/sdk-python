@@ -23,6 +23,12 @@ from .output_meta import (
     RawMeta,
     OutputMeta,
 )
+from .errors import (
+    APIError,
+    RequirementsNotMetError,
+    RequirementError,
+    SetupAction,
+)
 
 __all__ = [
     "BaseApp",
@@ -47,4 +53,9 @@ __all__ = [
     "AudioMeta",
     "RawMeta",
     "OutputMeta",
+    # Error types
+    "APIError",
+    "RequirementsNotMetError",
+    "RequirementError",
+    "SetupAction",
 ] 

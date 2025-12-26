@@ -30,6 +30,7 @@ from .models import (
 
 from .utils import StorageDir, download
 from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
+from .models.errors import APIError, RequirementsNotMetError, RequirementError, SetupAction
 
 __all__ = [
     "BaseApp",
@@ -50,6 +51,10 @@ __all__ = [
     "AsyncInference",
     "UploadFileOptions",
     "TaskStatus",
+    "APIError",
+    "RequirementsNotMetError",
+    "RequirementError",
+    "SetupAction",
     "MetaItem",
     "MetaItemType",
     "TextMeta",
