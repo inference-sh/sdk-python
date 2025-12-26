@@ -82,10 +82,11 @@ class OrderedSchemaModel(BaseModel):
 
         return field_order
 
+class BaseAppSetup(OrderedSchemaModel):
+    pass
 
 class BaseAppInput(OrderedSchemaModel):
     pass
-
 
 class BaseAppOutput(OrderedSchemaModel):
     output_meta: Optional[OutputMeta] = Field(
