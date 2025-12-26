@@ -1,16 +1,7 @@
 """Models package for inference.sh SDK."""
 
-from .base import BaseApp, BaseAppInput, BaseAppOutput, BaseAppSetup
+from .base import BaseApp, BaseAppInput, BaseAppOutput, BaseAppSetup, Metadata
 from .file import File
-from .metadata import Metadata
-from .requests import (
-    APIRequest,
-    SetupRequest,
-    RunRequest,
-    RunResponse,
-    PlaceholderAppInput,
-    PlaceholderAppOutput,
-)
 from .llm import (
     ContextMessageRole,
     Message,
@@ -46,13 +37,6 @@ __all__ = [
     "BaseAppSetup",
     "File",
     "Metadata",
-    # Request/Response models
-    "APIRequest",
-    "SetupRequest",
-    "RunRequest",
-    "RunResponse",
-    "PlaceholderAppInput",
-    "PlaceholderAppOutput",
     # LLM types
     "ContextMessageRole",
     "Message",
@@ -77,4 +61,4 @@ __all__ = [
     "RequirementsNotMetError",
     "RequirementError",
     "SetupAction",
-] 
+]
