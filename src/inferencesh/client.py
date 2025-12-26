@@ -476,8 +476,17 @@ class Inference:
         You can set wait=False to get just the task info, or stream=True to get an iterator
         of status updates.
         
+        App Reference Format:
+            ``namespace/name@shortid`` (version is required)
+            
+            The short ID ensures your code always runs the same version,
+            protecting against breaking changes from app updates.
+        
         Args:
-            params: Task parameters to pass to the API
+            params: Task parameters including:
+                - app: App reference with version (e.g., "okaris/flux@abc1")
+                - input: Input data for the app
+                - variant: Optional variant name
             wait: Whether to wait for task completion (default: True)
             stream: Whether to return an iterator of updates (default: False)
             auto_reconnect: Whether to automatically reconnect on connection loss
@@ -492,8 +501,11 @@ class Inference:
             
         Example:
             ```python
-            # Simple usage - wait for result (default)
-            result = client.run(params)
+            # Run with pinned version (required)
+            result = client.run({
+                "app": "okaris/flux@abc1",  # version @abc1 is pinned
+                "input": {"prompt": "hello"}
+            })
             print(f"Output: {result['output']}")
             
             # Get task info without waiting
@@ -949,8 +961,17 @@ class AsyncInference:
         You can set wait=False to get just the task info, or stream=True to get an async iterator
         of status updates.
         
+        App Reference Format:
+            ``namespace/name@shortid`` (version is required)
+            
+            The short ID ensures your code always runs the same version,
+            protecting against breaking changes from app updates.
+        
         Args:
-            params: Task parameters to pass to the API
+            params: Task parameters including:
+                - app: App reference with version (e.g., "okaris/flux@abc1")
+                - input: Input data for the app
+                - variant: Optional variant name
             wait: Whether to wait for task completion (default: True)
             stream: Whether to return an async iterator of updates (default: False)
             auto_reconnect: Whether to automatically reconnect on connection loss
@@ -965,8 +986,11 @@ class AsyncInference:
             
         Example:
             ```python
-            # Simple usage - wait for result (default)
-            result = await client.run(params)
+            # Run with pinned version (required)
+            result = await client.run({
+                "app": "okaris/flux@abc1",  # version @abc1 is pinned
+                "input": {"prompt": "hello"}
+            })
             print(f"Output: {result['output']}")
             
             # Get task info without waiting
