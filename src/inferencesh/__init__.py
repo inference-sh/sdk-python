@@ -1,12 +1,22 @@
 """inference.sh Python SDK package."""
 
-__version__ = "0.1.2"
+__version__ = "0.5.2"
 
 from .models import (
     BaseApp,
     BaseAppInput,
     BaseAppOutput,
+    BaseAppSetup,
     File,
+    Metadata,
+    # Request/Response models for kernel
+    APIRequest,
+    SetupRequest,
+    RunRequest,
+    RunResponse,
+    PlaceholderAppInput,
+    PlaceholderAppOutput,
+    # LLM types
     ContextMessageRole,
     Message,
     ContextMessage,
@@ -15,8 +25,7 @@ from .models import (
     build_messages,
     stream_generate,
     timing_context,
-)
-from .models import (
+    # OutputMeta types
     MetaItem,
     MetaItemType,
     TextMeta,
@@ -32,11 +41,26 @@ from .utils import StorageDir, download
 from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
 from .models.errors import APIError, RequirementsNotMetError, RequirementError, SetupAction
 
+# Kernel module for app runtime - used by CLI and engine
+from . import kernel
+from .kernel import AppContext
+
 __all__ = [
+    # Base types
     "BaseApp",
     "BaseAppInput",
     "BaseAppOutput",
+    "BaseAppSetup",
     "File",
+    "Metadata",
+    # Request/Response models
+    "APIRequest",
+    "SetupRequest",
+    "RunRequest",
+    "RunResponse",
+    "PlaceholderAppInput",
+    "PlaceholderAppOutput",
+    # LLM types
     "ContextMessageRole",
     "Message",
     "ContextMessage",
@@ -45,16 +69,7 @@ __all__ = [
     "build_messages",
     "stream_generate",
     "timing_context",
-    "StorageDir",
-    "download",
-    "Inference",
-    "AsyncInference",
-    "UploadFileOptions",
-    "TaskStatus",
-    "APIError",
-    "RequirementsNotMetError",
-    "RequirementError",
-    "SetupAction",
+    # OutputMeta types
     "MetaItem",
     "MetaItemType",
     "TextMeta",
@@ -64,4 +79,20 @@ __all__ = [
     "AudioMeta",
     "RawMeta",
     "OutputMeta",
+    # Utils
+    "StorageDir",
+    "download",
+    # Client
+    "Inference",
+    "AsyncInference",
+    "UploadFileOptions",
+    "TaskStatus",
+    # Errors
+    "APIError",
+    "RequirementsNotMetError",
+    "RequirementError",
+    "SetupAction",
+    # Kernel module
+    "kernel",
+    "AppContext",
 ]
