@@ -28,6 +28,18 @@ print(f"Task ID: {result.get('id')}")
 print(f"Output: {result.get('output')}")
 ```
 
+### with setup parameters
+
+Setup parameters configure the app instance (e.g., model selection). Workers with matching setup are "warm" and skip the setup phase:
+
+```python
+result = client.run({
+    "app": "your-app",
+    "setup": {"model": "schnell"},  # Setup parameters
+    "input": {"prompt": "hello"}
+})
+```
+
 ### run options
 
 ```python
