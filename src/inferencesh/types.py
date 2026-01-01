@@ -759,6 +759,30 @@ class WorkerStateSummary(TypedDict, total=False):
 
 
 ##########
+# source: file.go
+
+class File(TypedDict, total=False):
+    path: str
+    remote_path: str
+    upload_url: str
+    uri: str
+    content_type: str
+    size: int
+    filename: str
+    rating: ContentRating
+
+class FileDTO(TypedDict, total=False):
+    path: str
+    remote_path: str
+    upload_url: str
+    uri: str
+    content_type: str
+    size: int
+    filename: str
+    rating: ContentRating
+
+
+##########
 # source: flow.go
 
 class Flow(TypedDict, total=False):
@@ -948,6 +972,19 @@ class IntegrationRequirement(TypedDict, total=False):
     key: str
     description: str
     optional: bool
+
+# RequirementError represents a single missing requirement with actionable info
+class RequirementError(TypedDict, total=False):
+    type: str
+    key: str
+    message: str
+    action: SetupAction
+
+# SetupAction provides actionable info for resolving a missing requirement
+class SetupAction(TypedDict, total=False):
+    type: str
+    provider: str
+    scopes: List[str]
 
 
 ##########
