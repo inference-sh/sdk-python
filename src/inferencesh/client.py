@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Callable, Generator, Union, Iterator, AsyncIterator
 from dataclasses import dataclass
-from enum import IntEnum
 import json
 import re
 import time
@@ -12,6 +11,7 @@ from contextlib import AbstractContextManager, AbstractAsyncContextManager
 from typing import Protocol, runtime_checkable
 
 from .models.errors import APIError, RequirementsNotMetError
+from .types import TaskStatus
 
 
 class TaskStream(AbstractContextManager['TaskStream']):
@@ -207,20 +207,6 @@ async def _require_aiohttp():
         raise RuntimeError(
             "The 'aiohttp' package is required for async HTTP calls. Install with: pip install aiohttp"
         ) from exc
-
-
-class TaskStatus(IntEnum):
-    RECEIVED = 1
-    QUEUED = 2
-    SCHEDULED = 3
-    PREPARING = 4
-    SERVING = 5
-    SETTING_UP = 6
-    RUNNING = 7
-    UPLOADING = 8
-    COMPLETED = 9
-    FAILED = 10
-    CANCELLED = 11
 
 
 Base64_RE = re.compile(r"^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$")

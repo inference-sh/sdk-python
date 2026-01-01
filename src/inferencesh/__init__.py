@@ -34,6 +34,56 @@ from .utils import StorageDir, download
 from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
 from .models.errors import APIError, RequirementsNotMetError, RequirementError, SetupAction
 
+# Agent SDK (headless)
+from .agent import Agent, AsyncAgent, AgentConfig, AdHocAgentOptions, TemplateAgentOptions, ToolCallInfo
+
+# Tool Builder (fluent API)
+from .tools import (
+    tool,
+    app_tool,
+    agent_tool,
+    webhook_tool,
+    internal_tools,
+    string,
+    number,
+    integer,
+    boolean,
+    enum_of,
+    array,
+    obj,
+    optional,
+)
+
+# Generated types for Agent/Chat functionality
+from .types import (
+    # Enums
+    ChatStatus,
+    ChatMessageRole,
+    ChatMessageContentType,
+    ToolType,
+    ToolInvocationStatus,
+    # Agent types
+    Agent,
+    AgentTool,
+    AgentToolDTO,
+    AgentRuntimeConfig,
+    # Chat types
+    ChatDTO,
+    ChatMessageDTO,
+    ChatData,
+    ChatMessageContent,
+    ChatTaskInput,
+    ChatTaskContextMessage,
+    # Tool types
+    ToolCall,
+    ToolCallFunction,
+    ToolInvocationDTO,
+    ToolResultRequest,
+    Tool,
+    ToolFunction,
+    ToolParameters,
+)
+
 __all__ = [
     # Base types
     "BaseApp",
@@ -74,4 +124,51 @@ __all__ = [
     "RequirementsNotMetError",
     "RequirementError",
     "SetupAction",
+    # Generated types - Enums
+    "ChatStatus",
+    "ChatMessageRole",
+    "ChatMessageContentType",
+    "ToolType",
+    "ToolInvocationStatus",
+    # Generated types - Agent
+    "Agent",
+    "AgentTool",
+    "AgentToolDTO",
+    "AgentRuntimeConfig",
+    # Generated types - Chat
+    "ChatDTO",
+    "ChatMessageDTO",
+    "ChatData",
+    "ChatMessageContent",
+    "ChatTaskInput",
+    "ChatTaskContextMessage",
+    # Generated types - Tool
+    "ToolCall",
+    "ToolCallFunction",
+    "ToolInvocationDTO",
+    "ToolResultRequest",
+    "Tool",
+    "ToolFunction",
+    "ToolParameters",
+    # Agent SDK
+    "Agent",
+    "AsyncAgent",
+    "AgentConfig",
+    "AdHocAgentOptions",
+    "TemplateAgentOptions",
+    "ToolCallInfo",
+    # Tool Builder
+    "tool",
+    "app_tool",
+    "agent_tool",
+    "webhook_tool",
+    "internal_tools",
+    "string",
+    "number",
+    "integer",
+    "boolean",
+    "enum_of",
+    "array",
+    "obj",
+    "optional",
 ]

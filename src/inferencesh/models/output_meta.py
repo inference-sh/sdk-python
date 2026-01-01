@@ -4,16 +4,11 @@ from typing import Any, List, Optional, Union
 from enum import Enum
 from pydantic import BaseModel, Field
 
-
-class MetaItemType(str, Enum):
-    """Type discriminator for MetaItem."""
-    TEXT = "text"
-    IMAGE = "image"
-    VIDEO = "video"
-    AUDIO = "audio"
-    RAW = "raw"
+# Use generated MetaItemType from types.py
+from inferencesh.types import MetaItemType
 
 
+# VideoResolution kept manual - generated names differ (VIDEO_RES480_P vs RES_480P)
 class VideoResolution(str, Enum):
     """Standard video resolution presets."""
     RES_480P = "480p"
