@@ -34,6 +34,28 @@ from .utils import StorageDir, download
 from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
 from .models.errors import APIError, RequirementsNotMetError, RequirementError, SetupAction
 
+
+def inference(*, api_key: str, base_url: str | None = None) -> Inference:
+    """Factory function for creating an Inference client (lowercase for branding).
+    
+    Example:
+        ```python
+        client = inference(api_key="your-api-key")
+        ```
+    """
+    return Inference(api_key=api_key, base_url=base_url)
+
+
+def async_inference(*, api_key: str, base_url: str | None = None) -> AsyncInference:
+    """Factory function for creating an AsyncInference client (lowercase for branding).
+    
+    Example:
+        ```python
+        client = async_inference(api_key="your-api-key")
+        ```
+    """
+    return AsyncInference(api_key=api_key, base_url=base_url)
+
 # Agent SDK (headless)
 from .agent import Agent, AsyncAgent, AgentConfig, AdHocAgentOptions, TemplateAgentOptions, ToolCallInfo
 
@@ -115,6 +137,8 @@ __all__ = [
     "StorageDir",
     "download",
     # Client
+    "inference",
+    "async_inference",
     "Inference",
     "AsyncInference",
     "UploadFileOptions",

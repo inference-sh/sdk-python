@@ -11,10 +11,10 @@ pip install infsh
 ## client usage
 
 ```python
-from inferencesh import Inference, TaskStatus
+from inferencesh import inference, TaskStatus
 
 # Create client
-client = Inference(api_key="your-api-key")
+client = inference(api_key="your-api-key")
 
 # Simple synchronous usage - waits for completion by default
 result = client.run({
@@ -133,19 +133,19 @@ Note: Files in task input are automatically uploaded. You only need `upload_file
 
 ## agent chat
 
-Chat with AI agents using the `Agent` class.
+Chat with AI agents using `client.agent()`.
 
 ### using a template agent
 
 Use an existing agent from your workspace by its `namespace/name@shortid`:
 
 ```python
-from inferencesh import Agent, AgentConfig, TemplateAgentOptions
+from inferencesh import inference
 
-config = AgentConfig(api_key="your-api-key")
-agent = Agent(config, TemplateAgentOptions(
-    agent="my-org/assistant@abc123"  # namespace/name@shortid
-))
+client = inference(api_key="your-api-key")
+
+# Create agent from template
+agent = client.agent("my-org/assistant@abc123")
 
 # Send a message with streaming
 def on_message(msg):
@@ -163,10 +163,10 @@ print(f"\nChat ID: {agent.chat_id}")
 Create agents on-the-fly without saving to your workspace:
 
 ```python
-from inferencesh import Agent, AgentConfig, AdHocAgentOptions
-from inferencesh import tool, string, number
+from inferencesh import inference, AdHocAgentOptions
+from inferencesh import tool, string
 
-config = AgentConfig(api_key="your-api-key")
+client = inference(api_key="your-api-key")
 
 # Define a client tool
 weather_tool = (
@@ -177,7 +177,8 @@ weather_tool = (
     .build()
 )
 
-agent = Agent(config, AdHocAgentOptions(
+# Create ad-hoc agent
+agent = client.agent(AdHocAgentOptions(
     core_app="infsh/claude-sonnet-4@abc123",  # LLM to use
     system_prompt="You are a helpful assistant.",
     tools=[weather_tool]
@@ -209,10 +210,10 @@ response = agent.send_message(
 ### async agent
 
 ```python
-from inferencesh import AsyncAgent, AgentConfig, TemplateAgentOptions
+from inferencesh import async_inference
 
-config = AgentConfig(api_key="your-api-key")
-agent = AsyncAgent(config, TemplateAgentOptions(agent="my-org/assistant@abc123"))
+client = async_inference(api_key="your-api-key")
+agent = client.agent("my-org/assistant@abc123")
 
 response = await agent.send_message("Hello!")
 ```
@@ -220,10 +221,10 @@ response = await agent.send_message("Hello!")
 ## async client
 
 ```python
-from inferencesh import AsyncInference, TaskStatus
+from inferencesh import async_inference, TaskStatus
 
 async def main():
-    client = AsyncInference(api_key="your-api-key")
+    client = async_inference(api_key="your-api-key")
     
     # Simple usage - wait for completion
     result = await client.run({

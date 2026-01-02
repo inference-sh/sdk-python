@@ -845,6 +845,39 @@ class Inference:
 
         return input_value
 
+    def agent(self, config: Union[str, "AdHocAgentConfig"]) -> "Agent":
+        """Create an agent for chat interactions.
+        
+        Args:
+            config: Either a template reference string (namespace/name@version) or ad-hoc config
+            
+        Returns:
+            An Agent instance for chat operations
+            
+        Example:
+            ```python
+            # Template agent
+            agent = client.agent('okaris/assistant@abc123')
+            
+            # Ad-hoc agent
+            agent = client.agent(AdHocAgentConfig(
+                core_app='infsh/claude-sonnet-4@xyz789',
+                system_prompt='You are a helpful assistant',
+            ))
+            
+            # Send messages
+            response = agent.send_message('Hello!')
+            ```
+        """
+        from .agent import Agent, AdHocAgentConfig, TemplateAgentOptions, AgentConfig
+        
+        agent_config = AgentConfig(api_key=self._api_key, base_url=self._base_url)
+        
+        if isinstance(config, str):
+            return Agent(agent_config, TemplateAgentOptions(agent=config))
+        else:
+            return Agent(agent_config, config)
+
 
 class AsyncInference:
     """Async client for inference.sh API, mirroring the JS SDK behavior."""
@@ -1259,6 +1292,33 @@ class AsyncInference:
                     yield json.loads(data_str)
                 except json.JSONDecodeError:
                     continue
+
+    def agent(self, config: Union[str, "AdHocAgentConfig"]) -> "AsyncAgent":
+        """Create an async agent for chat interactions.
+        
+        Args:
+            config: Either a template reference string (namespace/name@version) or ad-hoc config
+            
+        Returns:
+            An AsyncAgent instance for chat operations
+            
+        Example:
+            ```python
+            # Template agent
+            agent = client.agent('okaris/assistant@abc123')
+            
+            # Send messages
+            response = await agent.send_message('Hello!')
+            ```
+        """
+        from .agent import AsyncAgent, AdHocAgentConfig, TemplateAgentOptions, AgentConfig
+        
+        agent_config = AgentConfig(api_key=self._api_key, base_url=self._base_url)
+        
+        if isinstance(config, str):
+            return AsyncAgent(agent_config, TemplateAgentOptions(agent=config))
+        else:
+            return AsyncAgent(agent_config, config)
 
 
 # --------------- small async utilities ---------------
