@@ -1,6 +1,6 @@
 """Real API test for sync and async clients."""
 import asyncio
-from inferencesh import Inference, AsyncInference, TaskStatus
+from inferencesh import inference, async_inference, TaskStatus
 
 API_KEY = "1nfsh-3vexhsbpwesgh8q0b1nzd5ze0g"
 
@@ -22,7 +22,7 @@ def test_sync():
     print("SYNC CLIENT TEST")
     print("=" * 50)
     
-    client = Inference(api_key=API_KEY, base_url="https://api-dev.inference.sh")
+    client = inference(api_key=API_KEY, base_url="https://api-dev.inference.sh")
     
     # Test 1: Run and wait (default)
     print("\n1. run() - wait for completion (default)")
@@ -76,7 +76,7 @@ async def test_async():
     print("ASYNC CLIENT TEST")
     print("=" * 50)
     
-    client = AsyncInference(api_key=API_KEY, base_url="https://api-dev.inference.sh")
+    client = async_inference(api_key=API_KEY, base_url="https://api-dev.inference.sh")
     
     # Test 1: Run and wait (default)
     print("\n1. await run() - wait for completion (default)")
