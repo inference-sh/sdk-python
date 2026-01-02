@@ -246,10 +246,11 @@ class CreateAgentMessageRequest(TypedDict, total=False):
     chat_id: str
     agent_id: str
     agent_version_id: str
+    agent: str
     tool_call_id: str
     input: ChatTaskInput
     integration_context: IntegrationContext
-    # Ad-hoc agent config - use this instead of AgentID for embedded configs
+    # Ad-hoc agent config - use this instead of Agent for embedded configs
     # If provided, creates a chat with this config directly (no agent reference)
     agent_config: AgentRuntimeConfig
 

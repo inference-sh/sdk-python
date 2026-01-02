@@ -43,8 +43,8 @@ class AdHocAgentOptions:
 @dataclass
 class TemplateAgentOptions:
     """Template agent configuration."""
-    agent_id: str
-    version_id: Optional[str] = None
+    agent: str
+    """Agent reference: namespace/name@version (e.g., "my-org/assistant@abc123")"""
 
 
 AgentOptions = AdHocAgentOptions | TemplateAgentOptions
@@ -141,8 +141,7 @@ class Agent:
         else:
             body = {
                 "chat_id": self._chat_id,
-                "agent_id": self._options.agent_id,
-                "agent_version_id": self._options.version_id,
+                "agent": self._options.agent,
                 "input": {"text": text, "image": image_uri, "files": file_uris, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
             }
         
@@ -467,8 +466,7 @@ class AsyncAgent:
         else:
             body = {
                 "chat_id": self._chat_id,
-                "agent_id": self._options.agent_id,
-                "agent_version_id": self._options.version_id,
+                "agent": self._options.agent,
                 "input": {"text": text, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
             }
         

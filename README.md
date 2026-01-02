@@ -131,6 +131,92 @@ file_obj = client.upload_file(
 
 Note: Files in task input are automatically uploaded. You only need `upload_file()` for manual uploads.
 
+## agent chat
+
+Chat with AI agents using the `Agent` class.
+
+### using a template agent
+
+Use an existing agent from your workspace by its `namespace/name@shortid`:
+
+```python
+from inferencesh import Agent, AgentConfig, TemplateAgentOptions
+
+config = AgentConfig(api_key="your-api-key")
+agent = Agent(config, TemplateAgentOptions(
+    agent="my-org/assistant@abc123"  # namespace/name@shortid
+))
+
+# Send a message with streaming
+def on_message(msg):
+    content = msg.get("content", [])
+    for c in content:
+        if c.get("type") == "text" and c.get("text"):
+            print(c["text"], end="", flush=True)
+
+response = agent.send_message("Hello!", on_message=on_message)
+print(f"\nChat ID: {agent.chat_id}")
+```
+
+### creating an ad-hoc agent
+
+Create agents on-the-fly without saving to your workspace:
+
+```python
+from inferencesh import Agent, AgentConfig, AdHocAgentOptions
+from inferencesh import tool, string, number
+
+config = AgentConfig(api_key="your-api-key")
+
+# Define a client tool
+weather_tool = (
+    tool("get_weather")
+    .description("Get current weather")
+    .params({"city": string("City name")})
+    .handler(lambda args: '{"temp": 72, "conditions": "sunny"}')
+    .build()
+)
+
+agent = Agent(config, AdHocAgentOptions(
+    core_app="infsh/claude-sonnet-4@abc123",  # LLM to use
+    system_prompt="You are a helpful assistant.",
+    tools=[weather_tool]
+))
+
+def on_tool_call(call):
+    print(f"[Tool: {call.name}]")
+    # Tools with handlers are auto-executed
+
+response = agent.send_message(
+    "What's the weather in Paris?",
+    on_message=on_message,
+    on_tool_call=on_tool_call
+)
+```
+
+### agent methods
+
+| Method | Description |
+|--------|-------------|
+| `send_message(text, ...)` | Send a message to the agent |
+| `get_chat(chat_id=None)` | Get chat history |
+| `stop_chat(chat_id=None)` | Stop current generation |
+| `submit_tool_result(tool_id, result)` | Submit result for a client tool |
+| `stream_messages(chat_id=None, ...)` | Stream message updates |
+| `stream_chat(chat_id=None, ...)` | Stream chat updates |
+| `reset()` | Start a new conversation |
+
+### async agent
+
+```python
+from inferencesh import AsyncAgent, AgentConfig, TemplateAgentOptions
+
+config = AgentConfig(api_key="your-api-key")
+agent = AsyncAgent(config, TemplateAgentOptions(agent="my-org/assistant@abc123"))
+
+response = await agent.send_message("Hello!")
+```
+
 ## async client
 
 ```python
