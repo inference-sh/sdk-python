@@ -206,9 +206,9 @@ class APIError(TypedDict, total=False):
     code: str
     message: str
 
-# ApiTaskRequest is the request body for running an app task.
+# ApiAppRunRequest is the request body for /apps/run endpoint.
 # Version pinning is required for stability.
-class ApiTaskRequest(TypedDict, total=False):
+class ApiAppRunRequest(TypedDict, total=False):
     # App reference in format: namespace/name@shortid (version required)
     # Example: "okaris/flux@abc1"
     # The short ID ensures your code always runs the same version.
@@ -220,27 +220,42 @@ class ApiTaskRequest(TypedDict, total=False):
     webhook: str
     setup: Any
     input: Any
+    # If true, returns SSE stream instead of JSON response
+    stream: bool
 
-# ApiAgentMessageRequest is the request body for sending a message to an ad-hoc agent.
-# Uses namespace/name@shortid format for the core LLM app (same as ApiTaskRequest).
-class ApiAgentMessageRequest(TypedDict, total=False):
+# ApiTaskRequest is an alias for ApiAppRunRequest (deprecated name)
+ApiTaskRequest = ApiAppRunRequest
+
+# ApiAgentRunRequest is the request body for /agents/run endpoint.
+# Supports both template agents and ad-hoc agents.
+class ApiAgentRunRequest(TypedDict, total=False):
     # Existing chat ID to continue a conversation (optional)
     chat_id: str
-    # Core LLM app reference in format: namespace/name@shortid
-    # Example: "infsh/claude-opus-45@1195p4sq"
+    # Template agent reference in format: namespace/name@shortid
+    # Example: "my-org/assistant@abc123"
+    # Use this OR core_app, not both
+    agent: str
+    # Core LLM app reference for ad-hoc agents in format: namespace/name@shortid
+    # Example: "infsh/claude-sonnet-4@1195p4sq"
+    # Use this for ad-hoc agents (without a saved template)
     core_app: str
-    # LLM parameters (temperature, top_p, context_size, etc.)
+    # LLM parameters for ad-hoc agents (temperature, top_p, context_size, etc.)
     core_app_input: Any
-    # Agent configuration
+    # Agent configuration for ad-hoc agents
     name: str
     description: str
     system_prompt: str
     example_prompts: List[str]
-    # Tools configuration
+    # Tools configuration for ad-hoc agents
     tools: List[Optional[AgentTool]]
     internal_tools: InternalToolsConfig
     # The message to send
     input: ChatTaskInput
+    # If true, returns SSE stream instead of JSON response
+    stream: bool
+
+# ApiAgentMessageRequest is an alias for ApiAgentRunRequest (deprecated name)
+ApiAgentMessageRequest = ApiAgentRunRequest
 
 class CreateAgentMessageRequest(TypedDict, total=False):
     chat_id: str

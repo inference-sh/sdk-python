@@ -509,7 +509,7 @@ class Inference:
         """
         # Create the task
         processed_input = self._process_input_data(params.get("input"))
-        task = self._request("post", "/run", data={**params, "input": processed_input})
+        task = self._request("post", "/apps/run", data={**params, "input": processed_input})
         
         # Return immediately if not waiting
         if not wait and not stream:
@@ -994,7 +994,7 @@ class AsyncInference:
         """
         # Create the task
         processed_input = await self._process_input_data(params.get("input"))
-        task = await self._request("post", "/run", data={**params, "input": processed_input})
+        task = await self._request("post", "/apps/run", data={**params, "input": processed_input})
         
         # Return immediately if not waiting
         if not wait and not stream:

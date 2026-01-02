@@ -45,7 +45,7 @@ def patch_requests(monkeypatch):
         })
 
         # Create task
-        if url.endswith("/run") and method.upper() == "POST":
+        if url.endswith("/apps/run") and method.upper() == "POST":
             body = json.loads(data)
             return DummyResponse(json_data={
                 "success": True,
@@ -339,7 +339,7 @@ class MockClientSession:
     
     def _get_response(self, method, url, kwargs):
         # Create task
-        if url.endswith("/run") and method.upper() == "POST":
+        if url.endswith("/apps/run") and method.upper() == "POST":
             data = kwargs.get("json", {})
             return MockAsyncResponse(json_data={
                 "success": True,

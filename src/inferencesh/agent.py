@@ -125,8 +125,8 @@ class Agent:
                 file_uris = [f["uri"] for f in others]
         
         is_adhoc = isinstance(self._options, AdHocAgentOptions)
-        endpoint = "/agents/message"
         
+        # Both template and ad-hoc use /agents/run
         if is_adhoc:
             body = {
                 "chat_id": self._chat_id,
@@ -145,7 +145,7 @@ class Agent:
                 "input": {"text": text, "image": image_uri, "files": file_uris, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
             }
         
-        response = self._request("post", endpoint, data=body)
+        response = self._request("post", "/agents/run", data=body)
         
         # Update chat ID
         assistant_msg = response.get("assistant_message", {})
@@ -187,6 +187,7 @@ class Agent:
     ) -> Iterator[ChatMessageDTO]:
         """
         Stream messages from the current chat with auto-reconnect.
+        Uses the unified stream endpoint with TypedEvents.
         
         Args:
             auto_reconnect: Whether to automatically reconnect on connection loss
@@ -205,14 +206,21 @@ class Agent:
         message_queue: Queue[ChatMessageDTO | Exception | None] = Queue()
         
         def create_event_source():
-            return self._create_sse_generator(f"/chats/{self._chat_id}/messages/stream")
+            # Use unified stream with TypedEvents
+            return self._create_typed_sse_generator(f"/chats/{self._chat_id}/stream")
+        
+        def handle_event(event_tuple):
+            event_type, data = event_tuple
+            # Only yield chat_messages events
+            if event_type == "chat_messages":
+                message_queue.put(data)
         
         manager = StreamManager(
             create_event_source=create_event_source,
             auto_reconnect=auto_reconnect,
             max_reconnects=max_reconnects,
             reconnect_delay_ms=reconnect_delay_ms,
-            on_data=lambda msg: message_queue.put(msg),
+            on_data=handle_event,
             on_error=lambda err: message_queue.put(err),
             on_stop=lambda: message_queue.put(None),
         )
@@ -240,6 +248,7 @@ class Agent:
     ) -> Iterator[ChatDTO]:
         """
         Stream chat updates with auto-reconnect.
+        Uses the unified stream endpoint with TypedEvents.
         
         Args:
             auto_reconnect: Whether to automatically reconnect on connection loss
@@ -258,14 +267,21 @@ class Agent:
         chat_queue: Queue[ChatDTO | Exception | None] = Queue()
         
         def create_event_source():
-            return self._create_sse_generator(f"/chats/{self._chat_id}/stream")
+            # Use unified stream with TypedEvents
+            return self._create_typed_sse_generator(f"/chats/{self._chat_id}/stream")
+        
+        def handle_event(event_tuple):
+            event_type, data = event_tuple
+            # Only yield chats events
+            if event_type == "chats":
+                chat_queue.put(data)
         
         manager = StreamManager(
             create_event_source=create_event_source,
             auto_reconnect=auto_reconnect,
             max_reconnects=max_reconnects,
             reconnect_delay_ms=reconnect_delay_ms,
-            on_data=lambda chat: chat_queue.put(chat),
+            on_data=handle_event,
             on_error=lambda err: chat_queue.put(err),
             on_stop=lambda: chat_queue.put(None),
         )
@@ -283,6 +299,42 @@ class Agent:
                 yield item
         finally:
             manager.stop()
+    
+    def stream_all(
+        self,
+        on_chat: Optional[Callable[[ChatDTO], None]] = None,
+        on_message: Optional[Callable[[ChatMessageDTO], None]] = None,
+        on_tool_call: Optional[Callable[["ToolCallInfo"], None]] = None,
+    ) -> None:
+        """
+        Stream all events (Chat and ChatMessage) from the unified stream endpoint.
+        Uses TypedEvents - single SSE connection for both event types.
+        
+        Args:
+            on_chat: Callback for Chat object updates (status changes)
+            on_message: Callback for ChatMessage updates
+            on_tool_call: Callback when a client tool needs execution
+        """
+        if not self._chat_id:
+            raise RuntimeError("No active chat - send a message first")
+        
+        for event_type, data in self._create_typed_sse_generator(f"/chats/{self._chat_id}/stream"):
+            if event_type == "chats" and on_chat:
+                on_chat(data)
+            elif event_type == "chat_messages":
+                if on_message:
+                    on_message(data)
+                
+                # Check for client tool invocations
+                if on_tool_call and data.get("tool_invocations"):
+                    for inv in data["tool_invocations"]:
+                        if (inv.get("type") == ToolType.CLIENT and 
+                            inv.get("status") == ToolInvocationStatus.AWAITING_INPUT):
+                            on_tool_call(ToolCallInfo(
+                                id=inv["id"],
+                                name=inv.get("function", {}).get("name", ""),
+                                args=inv.get("function", {}).get("arguments", {}),
+                            ))
     
     def reset(self) -> None:
         """Reset the agent (start fresh chat)."""
@@ -366,32 +418,57 @@ class Agent:
         
         return generator()
     
+    def _create_typed_sse_generator(self, endpoint: str):
+        """Create an SSE generator that yields (event_type, data) tuples for TypedEvents."""
+        requests = _require_requests()
+        
+        url = f"{self._base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Accept": "text/event-stream",
+        }
+        
+        resp = requests.get(url, headers=headers, stream=True, timeout=60)
+        
+        def generator():
+            current_event_type: Optional[str] = None
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line:
+                    current_event_type = None  # Reset on empty line (event boundary)
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("event:"):
+                    current_event_type = line[6:].strip()
+                    continue
+                if line.startswith("data:"):
+                    data_str = line[5:].strip()
+                    if data_str:
+                        try:
+                            data = json.loads(data_str)
+                            yield (current_event_type or "message", data)
+                        except json.JSONDecodeError:
+                            continue
+        
+        return generator()
+    
     def _start_streaming(
         self,
         on_message: Optional[Callable[[ChatMessageDTO], None]],
         on_tool_call: Optional[Callable[[ToolCallInfo], None]],
     ) -> None:
-        """Start background streaming with auto-reconnect."""
+        """Start background streaming using unified stream with TypedEvents."""
         if not self._chat_id:
             return
         
         import threading
         
         def run_stream():
-            for message in self.stream_messages(auto_reconnect=True):
-                if on_message:
-                    on_message(message)
-                
-                # Check for client tool invocations
-                if on_tool_call and message.get("tool_invocations"):
-                    for inv in message["tool_invocations"]:
-                        if (inv.get("type") == ToolType.CLIENT and 
-                            inv.get("status") == ToolInvocationStatus.AWAITING_INPUT):
-                            on_tool_call(ToolCallInfo(
-                                id=inv["id"],
-                                name=inv.get("function", {}).get("name", ""),
-                                args=inv.get("function", {}).get("arguments", {}),
-                            ))
+            # Use unified stream (single SSE connection for both Chat and ChatMessage)
+            self.stream_all(
+                on_message=on_message,
+                on_tool_call=on_tool_call,
+            )
         
         # Run in background thread so send_message can return immediately
         thread = threading.Thread(target=run_stream, daemon=True)
@@ -450,8 +527,8 @@ class AsyncAgent:
     async def send_message(self, text: str) -> ChatMessageDTO:
         """Send a message to the agent."""
         is_adhoc = isinstance(self._options, AdHocAgentOptions)
-        endpoint = "/agents/message"
         
+        # Both template and ad-hoc use /agents/run
         if is_adhoc:
             body = {
                 "chat_id": self._chat_id,
@@ -470,7 +547,7 @@ class AsyncAgent:
                 "input": {"text": text, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
             }
         
-        response = await self._request("post", endpoint, data=body)
+        response = await self._request("post", "/agents/run", data=body)
         
         assistant_msg = response.get("assistant_message", {})
         if not self._chat_id and assistant_msg.get("chat_id"):
@@ -497,11 +574,22 @@ class AsyncAgent:
         })
     
     async def stream_messages(self) -> AsyncIterator[ChatMessageDTO]:
+        """Stream messages from the unified stream endpoint with TypedEvents."""
         if not self._chat_id:
             raise RuntimeError("No active chat - send a message first")
         
-        async for event in self._stream_sse(f"/chats/{self._chat_id}/messages/stream"):
-            yield event
+        async for event_type, data in self._stream_typed_sse(f"/chats/{self._chat_id}/stream"):
+            if event_type == "chat_messages":
+                yield data
+    
+    async def stream_chat(self) -> AsyncIterator[ChatDTO]:
+        """Stream chat updates from the unified stream endpoint with TypedEvents."""
+        if not self._chat_id:
+            raise RuntimeError("No active chat - send a message first")
+        
+        async for event_type, data in self._stream_typed_sse(f"/chats/{self._chat_id}/stream"):
+            if event_type == "chats":
+                yield data
     
     def reset(self) -> None:
         self._chat_id = None
@@ -527,6 +615,7 @@ class AsyncAgent:
                 return payload.get("data")
     
     async def _stream_sse(self, endpoint: str) -> AsyncIterator[Dict[str, Any]]:
+        """Stream SSE events (yields raw data without event type)."""
         aiohttp = await _require_aiohttp()
         
         url = f"{self._base_url}{endpoint}"
@@ -546,6 +635,38 @@ class AsyncAgent:
                         if data_str:
                             try:
                                 yield json.loads(data_str)
+                            except json.JSONDecodeError:
+                                continue
+    
+    async def _stream_typed_sse(self, endpoint: str) -> AsyncIterator[tuple[str, Dict[str, Any]]]:
+        """Stream SSE events with TypedEvents (yields event_type, data tuples)."""
+        aiohttp = await _require_aiohttp()
+        
+        url = f"{self._base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Accept": "text/event-stream",
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                current_event_type: Optional[str] = None
+                async for line in resp.content:
+                    line_str = line.decode().strip()
+                    if not line_str:
+                        current_event_type = None  # Reset on empty line (event boundary)
+                        continue
+                    if line_str.startswith(":"):
+                        continue
+                    if line_str.startswith("event:"):
+                        current_event_type = line_str[6:].strip()
+                        continue
+                    if line_str.startswith("data:"):
+                        data_str = line_str[5:].strip()
+                        if data_str:
+                            try:
+                                data = json.loads(data_str)
+                                yield (current_event_type or "message", data)
                             except json.JSONDecodeError:
                                 continue
 
