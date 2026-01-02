@@ -176,9 +176,7 @@ class Agent:
     
     def submit_tool_result(self, tool_invocation_id: str, result: str) -> None:
         """Submit a tool execution result."""
-        if not self._chat_id:
-            raise RuntimeError("No active chat")
-        self._request("post", f"/chats/{self._chat_id}/tools/{tool_invocation_id}", data={
+        self._request("post", f"/tools/{tool_invocation_id}", data={
             "result": result,
         })
     
@@ -595,9 +593,7 @@ class AsyncAgent:
             await self._request("post", f"/chats/{self._chat_id}/stop")
     
     async def submit_tool_result(self, tool_invocation_id: str, result: str) -> None:
-        if not self._chat_id:
-            raise RuntimeError("No active chat")
-        await self._request("post", f"/chats/{self._chat_id}/tools/{tool_invocation_id}", data={
+        await self._request("post", f"/tools/{tool_invocation_id}", data={
             "result": result,
         })
     
