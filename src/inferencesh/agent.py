@@ -386,8 +386,8 @@ class Agent:
                 # Check for client tool invocations
                 if on_tool_call and message.get("tool_invocations"):
                     for inv in message["tool_invocations"]:
-                    if (inv.get("type") == ToolType.CLIENT and 
-                        inv.get("status") == ToolInvocationStatus.AWAITING_INPUT):
+                        if (inv.get("type") == ToolType.CLIENT and 
+                            inv.get("status") == ToolInvocationStatus.AWAITING_INPUT):
                             on_tool_call(ToolCallInfo(
                                 id=inv["id"],
                                 name=inv.get("function", {}).get("name", ""),

@@ -30,10 +30,10 @@ dependencies = [
 [project.scripts]
 infsh = "infsh.__main__:cli"
 
-[tool.pytest]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v"
+addopts = ["-v"]
 
 [tool.flake8]
 max-line-length = 100
