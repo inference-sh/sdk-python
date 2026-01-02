@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum
 from typing import Any, Dict, List, Optional, TypedDict, Union
 from datetime import datetime
 
@@ -17,7 +17,7 @@ class InternalToolsConfig(TypedDict, total=False):
     widget: bool
     finish: bool
 
-class ToolType(StrEnum):
+class ToolType(str, Enum):
     APP = "app"
     AGENT = "agent"
     HOOK = "hook"
@@ -445,7 +445,7 @@ class MoveAgentToProjectRequest(TypedDict, total=False):
 ##########
 # source: app.go
 
-class AppCategory(StrEnum):
+class AppCategory(str, Enum):
     IMAGE = "image"
     VIDEO = "video"
     AUDIO = "audio"
@@ -455,7 +455,7 @@ class AppCategory(StrEnum):
     OTHER = "other"
     FLOW = "flow"
 
-class GPUType(StrEnum):
+class GPUType(str, Enum):
     ANY = "any"
     NONE = "none"
     INTEL = "intel"
@@ -557,7 +557,7 @@ class BaseModel(TypedDict, total=False):
     updated_at: str
     deleted_at: str
 
-class Visibility(StrEnum):
+class Visibility(str, Enum):
     PRIVATE = "private"
     PUBLIC = "public"
     UNLISTED = "unlisted"
@@ -580,7 +580,7 @@ class PermissionModelDTO(TypedDict, total=False):
 ##########
 # source: chat.go
 
-class ChatStatus(StrEnum):
+class ChatStatus(str, Enum):
     BUSY = "busy"
     IDLE = "idle"
     # ChatStatusWaitingInput ChatStatus = "waiting_input"
@@ -603,26 +603,26 @@ class PlanStep(TypedDict, total=False):
     notes: str
     status: PlanStepStatus
 
-class PlanStepStatus(StrEnum):
+class PlanStepStatus(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
-class ChatMessageRole(StrEnum):
+class ChatMessageRole(str, Enum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
     TOOL = "tool"
 
-class ChatMessageContentType(StrEnum):
+class ChatMessageContentType(str, Enum):
     TEXT = "text"
     REASONING = "reasoning"
     IMAGE = "image"
     FILE = "file"
     TOOL = "tool"
 
-class IntegrationType(StrEnum):
+class IntegrationType(str, Enum):
     SLACK = "slack"
     DISCORD = "discord"
     TEAMS = "teams"
@@ -711,7 +711,7 @@ StringEncodedMap = Dict[str, Any]
 ##########
 # source: deviceauth.go
 
-class DeviceAuthStatus(StrEnum):
+class DeviceAuthStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     EXPIRED = "expired"
@@ -724,7 +724,7 @@ class DeviceAuthStatus(StrEnum):
 ##########
 # source: engine.go
 
-class EngineStatus(StrEnum):
+class EngineStatus(str, Enum):
     RUNNING = "running"
     PENDING = "pending"
     STOPPING = "stopping"
@@ -916,7 +916,7 @@ class IntegrationDTO(TypedDict, total=False):
 ##########
 # source: project.go
 
-class ProjectType(StrEnum):
+class ProjectType(str, Enum):
     AGENT = "agent"
     APP = "app"
     FLOW = "flow"
@@ -958,7 +958,7 @@ class ProjectDTO(TypedDict, total=False):
 ##########
 # source: rating.go
 
-class ContentRating(StrEnum):
+class ContentRating(str, Enum):
     CONTENT_SAFE = "safe"
     # sexual content
     CONTENT_SEXUAL_SUGGESTIVE = "sexual_suggestive"
@@ -1006,7 +1006,7 @@ class SetupAction(TypedDict, total=False):
 ##########
 # source: shadeform.go
 
-class InstanceCloudProvider(StrEnum):
+class InstanceCloudProvider(str, Enum):
     CLOUD_A_W_S = "aws"
     CLOUD_AZURE = "azure"
     CLOUD_LAMBDA_LABS = "lambdalabs"
@@ -1021,7 +1021,7 @@ class InstanceCloudProvider(StrEnum):
     CLOUD_VULTR = "vultr"
     CLOUD_SHADE = "shade"
 
-class InstanceStatus(StrEnum):
+class InstanceStatus(str, Enum):
     PENDING = "pending"
     ACTIVE = "active"
     DELETED = "deleted"
@@ -1166,7 +1166,7 @@ class TaskStatus(IntEnum):
     FAILED = 10
     CANCELLED = 11
 
-class Infra(StrEnum):
+class Infra(str, Enum):
     PRIVATE = "private"
     CLOUD = "cloud"
     PRIVATE_FIRST = "private_first"
@@ -1246,7 +1246,7 @@ class TimescaleTask(TypedDict, total=False):
 ##########
 # source: team.go
 
-class TeamType(StrEnum):
+class TeamType(str, Enum):
     PERSONAL = "personal"
     TEAM = "team"
     SYSTEM = "system"
@@ -1269,7 +1269,7 @@ class TeamDTO(TypedDict, total=False):
     email: str
     setup_completed: bool
 
-class TeamRole(StrEnum):
+class TeamRole(str, Enum):
     OWNER = "owner"
     ADMIN = "admin"
     MEMBER = "member"
@@ -1293,7 +1293,7 @@ class ToolInvocationFunction(TypedDict, total=False):
     name: str
     arguments: StringEncodedMap
 
-class ToolInvocationStatus(StrEnum):
+class ToolInvocationStatus(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     AWAITING_INPUT = "awaiting_input"
@@ -1345,7 +1345,7 @@ class ToolParameterProperty(TypedDict, total=False):
 ##########
 # source: tx.go
 
-class TransactionType(StrEnum):
+class TransactionType(str, Enum):
     CREDIT = "credit"
     DEBIT = "debit"
 
@@ -1371,7 +1371,7 @@ class PaymentRecordStatus(IntEnum):
     FAILED = 2
     EXPIRED = 3
 
-class PaymentRecordType(StrEnum):
+class PaymentRecordType(str, Enum):
     CHECKOUT = "checkout"
     AUTO_RECHARGE = "auto_recharge"
 
@@ -1391,18 +1391,18 @@ class PaymentRecord(TypedDict, total=False):
 ##########
 # source: usage.go
 
-class UsageEventResourceTier(StrEnum):
+class UsageEventResourceTier(str, Enum):
     PRIVATE = "private"
     CLOUD = "cloud"
 
-class MetaItemType(StrEnum):
+class MetaItemType(str, Enum):
     TEXT = "text"
     IMAGE = "image"
     VIDEO = "video"
     AUDIO = "audio"
     RAW = "raw"
 
-class VideoResolution(StrEnum):
+class VideoResolution(str, Enum):
     VIDEO_RES480_P = "480p"
     VIDEO_RES720_P = "720p"
     VIDEO_RES1080_P = "1080p"
@@ -1498,7 +1498,7 @@ class User(TypedDict, total=False):
     avatar_url: str
     metadata: UserMetadata
 
-class Role(StrEnum):
+class Role(str, Enum):
     GUEST = "guest"
     USER = "user"
     ADMIN = "admin"
@@ -1543,7 +1543,7 @@ class WidgetActionButton(TypedDict, total=False):
     action: WidgetAction
     variant: str
 
-class WidgetNodeType(StrEnum):
+class WidgetNodeType(str, Enum):
     # Primitive node types (render literal values)
     TEXT = "text"
     MARKDOWN = "markdown"
