@@ -32,6 +32,7 @@ from .models import (
 
 from .utils import StorageDir, download
 from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
+from .types import is_terminal_status
 from .models.errors import APIError, RequirementsNotMetError, RequirementError, SetupAction
 
 
@@ -143,6 +144,7 @@ __all__ = [
     "AsyncInference",
     "UploadFileOptions",
     "TaskStatus",
+    "is_terminal_status",
     # Errors
     "APIError",
     "RequirementsNotMetError",

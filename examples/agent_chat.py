@@ -10,18 +10,16 @@ Usage:
     python examples/agent_chat.py
 """
 
-import os
 import sys
 import json
 
 from inferencesh import (
-    Agent,
-    AgentConfig,
+    inference,
     AdHocAgentOptions,
     ToolCallInfo,
+    is_terminal_status,
     # Tool builders
     tool,
-    app_tool,
     internal_tools,
     string,
     number,
@@ -132,37 +130,34 @@ TOOL_HANDLERS = {
 # =============================================================================
 
 def main():
-    api_key = os.environ.get("INFERENCE_API_KEY")
+    api_key = "1nfsh-40d0xtgj90nd2tbtxjg2s96e1p"
     if not api_key:
         print("Set INFERENCE_API_KEY environment variable")
         sys.exit(1)
     
-    # Create agent with ad-hoc config
-    agent = Agent(
-        AgentConfig(api_key=api_key),
-        AdHocAgentOptions(
-            core_app="infsh/claude-sonnet-4@latest",  # Replace with actual app reference
-            name="Tool Assistant",
-            system_prompt="""You are a helpful assistant with access to tools.
+    # Create client and agent with ad-hoc config
+    client = inference(api_key=api_key, base_url="https://api-dev.inference.sh")
+    agent = client.agent(AdHocAgentOptions(
+        core_app="infsh/claude-haiku-45@375bg07t",  # Replace with actual app reference
+        name="Tool Assistant",
+        system_prompt="""You are a helpful assistant with access to tools.
 Available tools:
 - calculator: Performs math operations
 - get_weather: Gets weather for a location  
 - search_files: Searches files (requires approval)
 
 Use tools when appropriate to help the user.""",
-            tools=[calculator_tool, weather_tool, search_tool],
-            internal_tools=internal_tools().memory().build(),
-        )
-    )
+        tools=[calculator_tool, weather_tool, search_tool],
+        internal_tools=internal_tools().memory().build(),
+    ))
     
     print("Agent ready. Sending message...\n")
     
     # Callback for message updates
     def on_message(msg):
-        content = msg.get("content", [])
-        for c in content:
+        for c in msg.get("content", []):
             if c.get("type") == "text" and c.get("text"):
-                print(c["text"], end="", flush=True)
+                print(c["text"])
     
     # Callback for tool calls
     def on_tool_call(call: ToolCallInfo):
@@ -184,7 +179,7 @@ Use tools when appropriate to help the user.""",
             )
     
     # Send first message
-    response = agent.send_message(
+    agent.send_message(
         "What is 42 * 17? Also, what's the weather in Paris?",
         on_message=on_message,
         on_tool_call=on_tool_call,
@@ -206,19 +201,18 @@ Use tools when appropriate to help the user.""",
 
 def main_streaming():
     """Alternative example using manual streaming."""
-    api_key = os.environ.get("INFERENCE_API_KEY")
+    api_key = "1nfsh-40d0xtgj90nd2tbtxjg2s96e1p"
     if not api_key:
         print("Set INFERENCE_API_KEY environment variable")
         sys.exit(1)
     
-    agent = Agent(
-        AgentConfig(api_key=api_key),
-        AdHocAgentOptions(
-            core_app="infsh/claude-sonnet-4@latest",
-            name="Simple Assistant",
-            system_prompt="You are a helpful assistant.",
-        )
-    )
+    # Create client and agent
+    client = inference(api_key=api_key, base_url="https://api-dev.inference.sh")
+    agent = client.agent(AdHocAgentOptions(
+        core_app="infsh/claude-haiku-45@375bg07t",
+        name="Simple Assistant",
+        system_prompt="You are a helpful assistant.",
+    ))
     
     # Send message (no callbacks - we'll stream manually)
     agent.send_message("Tell me a short joke")
@@ -237,7 +231,7 @@ def main_streaming():
                 print(c["text"], end="", flush=True)
         
         # Check if complete
-        if message.get("task_status") in [9, 10, 11]:  # COMPLETED, FAILED, CANCELLED
+        if is_terminal_status(message.get("task_status")):
             break
     
     print("\n\nDone!")

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, Optional, Callable, Iterator, AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .types import (
     ChatDTO,
@@ -83,6 +83,7 @@ class Agent:
         self._base_url = config.base_url
         self._options = options
         self._chat_id: Optional[str] = None
+        self._dispatched_tools: set[str] = set()  # tool invocation ids we've already processed
     
     @property
     def chat_id(self) -> Optional[str]:
@@ -108,7 +109,8 @@ class Agent:
         Returns:
             The assistant's response message
         """
-        requests = _require_requests()
+        # Clear dispatched tools from previous message
+        self._dispatched_tools.clear()
         
         # Upload files if provided
         image_uri: Optional[str] = None
@@ -146,6 +148,8 @@ class Agent:
             }
         
         response = self._request("post", "/agents/run", data=body)
+        if not response:
+            raise RuntimeError("Empty response from /agents/run")
         
         # Update chat ID
         assistant_msg = response.get("assistant_message", {})
@@ -174,8 +178,7 @@ class Agent:
         """Submit a tool execution result."""
         if not self._chat_id:
             raise RuntimeError("No active chat")
-        self._request("post", f"/chats/{self._chat_id}/tool-result", data={
-            "tool_invocation_id": tool_invocation_id,
+        self._request("post", f"/chats/{self._chat_id}/tools/{tool_invocation_id}", data={
             "result": result,
         })
     
@@ -310,6 +313,8 @@ class Agent:
         Stream all events (Chat and ChatMessage) from the unified stream endpoint.
         Uses TypedEvents - single SSE connection for both event types.
         
+        Automatically stops when the chat becomes idle (agent finished responding).
+        
         Args:
             on_chat: Callback for Chat object updates (status changes)
             on_message: Callback for ChatMessage updates
@@ -319,19 +324,28 @@ class Agent:
             raise RuntimeError("No active chat - send a message first")
         
         for event_type, data in self._create_typed_sse_generator(f"/chats/{self._chat_id}/stream"):
-            if event_type == "chats" and on_chat:
-                on_chat(data)
+            if event_type == "chats":
+                if on_chat:
+                    on_chat(data)
+                # Stop streaming when chat becomes idle (agent finished)
+                if data.get("status") in ("idle", "completed"):
+                    break
+                    
             elif event_type == "chat_messages":
                 if on_message:
                     on_message(data)
                 
-                # Check for client tool invocations
-                if on_tool_call and data.get("tool_invocations"):
-                    for inv in data["tool_invocations"]:
-                        if (inv.get("type") == ToolType.CLIENT and 
-                            inv.get("status") == ToolInvocationStatus.AWAITING_INPUT):
+                # Check for client tool invocations awaiting input
+                # (no task_status check - ID tracking handles duplicates)
+                if on_tool_call:
+                    for inv in data.get("tool_invocations") or []:
+                        inv_id = inv.get("id")
+                        if not inv_id or inv_id in self._dispatched_tools:
+                            continue
+                        if inv.get("type") == ToolType.CLIENT and inv.get("status") == ToolInvocationStatus.AWAITING_INPUT:
+                            self._dispatched_tools.add(inv_id)
                             on_tool_call(ToolCallInfo(
-                                id=inv["id"],
+                                id=inv_id,
                                 name=inv.get("function", {}).get("name", ""),
                                 args=inv.get("function", {}).get("arguments", {}),
                             ))
@@ -339,6 +353,7 @@ class Agent:
     def reset(self) -> None:
         """Reset the agent (start fresh chat)."""
         self._chat_id = None
+        self._dispatched_tools.clear()
     
     def upload_file(self, data: bytes | str) -> Dict[str, Any]:
         """
@@ -457,22 +472,21 @@ class Agent:
         on_message: Optional[Callable[[ChatMessageDTO], None]],
         on_tool_call: Optional[Callable[[ToolCallInfo], None]],
     ) -> None:
-        """Start background streaming using unified stream with TypedEvents."""
+        """Start streaming and wait for completion.
+        
+        Uses unified stream with TypedEvents. Blocks until the chat is complete.
+        Tool call callbacks run in a separate thread, allowing submit_tool_result
+        to be called from within the callback.
+        """
         if not self._chat_id:
             return
         
-        import threading
-        
-        def run_stream():
-            # Use unified stream (single SSE connection for both Chat and ChatMessage)
-            self.stream_all(
-                on_message=on_message,
-                on_tool_call=on_tool_call,
-            )
-        
-        # Run in background thread so send_message can return immediately
-        thread = threading.Thread(target=run_stream, daemon=True)
-        thread.start()
+        # Run synchronously - stream_all blocks until the chat completes
+        # Callbacks are invoked inline as events arrive
+        self.stream_all(
+            on_message=on_message,
+            on_tool_call=on_tool_call,
+        )
     
     def _request(
         self,
@@ -497,9 +511,24 @@ class Agent:
             timeout=30,
         )
         
-        payload = resp.json() if resp.text else {}
+        # Try to parse JSON response
+        payload = {}
+        if resp.text:
+            try:
+                payload = json.loads(resp.text)
+            except json.JSONDecodeError:
+                # Some endpoints may return non-JSON (e.g., plain "true")
+                # If response is OK, treat as success with no data
+                if resp.ok:
+                    return None
+                raise RuntimeError(f"Invalid response: {resp.text[:200]}")
         
-        if not resp.ok or not payload.get("success"):
+        if not resp.ok:
+            error = payload.get("error", {})
+            msg = error.get("message") if isinstance(error, dict) else str(error)
+            raise RuntimeError(msg or f"Request failed: {resp.status_code}")
+        
+        if not payload.get("success"):
             error = payload.get("error", {})
             msg = error.get("message") if isinstance(error, dict) else str(error)
             raise RuntimeError(msg or "Request failed")
@@ -568,8 +597,7 @@ class AsyncAgent:
     async def submit_tool_result(self, tool_invocation_id: str, result: str) -> None:
         if not self._chat_id:
             raise RuntimeError("No active chat")
-        await self._request("post", f"/chats/{self._chat_id}/tool-result", data={
-            "tool_invocation_id": tool_invocation_id,
+        await self._request("post", f"/chats/{self._chat_id}/tools/{tool_invocation_id}", data={
             "result": result,
         })
     

@@ -1166,6 +1166,14 @@ class TaskStatus(IntEnum):
     FAILED = 10
     CANCELLED = 11
 
+
+def is_terminal_status(status: int | None) -> bool:
+    """Check if a task status is terminal (completed, failed, or cancelled)."""
+    if status is None:
+        return False
+    return status >= TaskStatus.COMPLETED
+
+
 class Infra(str, Enum):
     PRIVATE = "private"
     CLOUD = "cloud"

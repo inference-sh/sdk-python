@@ -14,7 +14,7 @@ Environment variables:
 import os
 import sys
 
-from inferencesh import Agent, AgentConfig, TemplateAgentOptions
+from inferencesh import inference
 
 
 def main():
@@ -31,10 +31,9 @@ def main():
         print("Get this from your agent in the workspace: https://app.inference.sh/agents", file=sys.stderr)
         sys.exit(1)
 
-    # Create agent from template using namespace/name@shortid format
-    config = AgentConfig(api_key=api_key)
-    options = TemplateAgentOptions(agent=agent_ref)
-    agent = Agent(config, options)
+    # Create client and agent from template using namespace/name@shortid format
+    client = inference(api_key=api_key, base_url="https://api-dev.inference.sh")
+    agent = client.agent(agent_ref)
     
     print(f"Using template agent: {agent_ref}")
     print("Sending message...\n")

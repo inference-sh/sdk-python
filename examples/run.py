@@ -2,7 +2,7 @@
 import asyncio
 from inferencesh import inference, async_inference, TaskStatus
 
-API_KEY = "1nfsh-3vexhsbpwesgh8q0b1nzd5ze0g"
+API_KEY = "1nfsh-40d0xtgj90nd2tbtxjg2s96e1p"
 
 TASK_PARAMS = {
     "app": "infsh/text-templating",
