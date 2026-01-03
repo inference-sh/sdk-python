@@ -8,13 +8,12 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, Optional, Callable, Iterator, AsyncIterator
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from .types import (
     ChatDTO,
     ChatMessageDTO,
-    AgentTool,
-    InternalToolsConfig,
+    AgentRuntimeConfig,
     ToolType,
     ToolInvocationStatus,
 )
@@ -28,30 +27,8 @@ class AgentConfig:
     base_url: str = "https://api.inference.sh"
 
 
-@dataclass
-class AdHocAgentOptions:
-    """Ad-hoc agent configuration - mirrors Go AgentRuntimeConfig."""
-    core_app_ref: str
-    """Core LLM app ref: namespace/name@shortid (e.g., "infsh/claude-sonnet-4@abc123")"""
-    name: Optional[str] = None
-    namespace: Optional[str] = None
-    description: Optional[str] = None
-    system_prompt: Optional[str] = None
-    example_prompts: Optional[list[str]] = None
-    core_app_input: Optional[Dict[str, Any]] = None
-    tools: Optional[list[AgentTool]] = None
-    internal_tools: Optional[InternalToolsConfig] = None
-    output_schema: Optional[Dict[str, Any]] = None
-
-
-@dataclass
-class TemplateAgentOptions:
-    """Template agent configuration."""
-    agent: str
-    """Agent reference: namespace/name@version (e.g., "my-org/assistant@abc123")"""
-
-
-AgentOptions = AdHocAgentOptions | TemplateAgentOptions
+# Agent options: either a template ref string or an ad-hoc config dict
+AgentOptions = str | AgentRuntimeConfig
 
 
 @dataclass
@@ -69,7 +46,7 @@ class Agent:
     Example:
         ```python
         config = AgentConfig(api_key="your-key")
-        options = AdHocAgentOptions(core_app="infsh/claude-sonnet-4@abc123")
+        options = AgentRuntimeConfig(core_app_ref="infsh/claude-sonnet-4@abc123")
         
         agent = Agent(config, options)
         
@@ -130,14 +107,12 @@ class Agent:
             if others:
                 file_uris = [f["uri"] for f in others]
         
-        is_adhoc = isinstance(self._options, AdHocAgentOptions)
-        
-        # Both template and ad-hoc use /agents/run
+        # Build request body - /agents/run accepts either "agent" (template ref) or "agent_config" (ad-hoc)
         input_data = {"text": text, "image": image_uri, "files": file_uris, "role": "user", "context": [], "system_prompt": "", "context_size": 0}
-        if is_adhoc:
-            body = {"chat_id": self._chat_id, "agent_config": asdict(self._options), "input": input_data}
+        if isinstance(self._options, str):
+            body = {"chat_id": self._chat_id, "agent": self._options, "input": input_data}
         else:
-            body = {"chat_id": self._chat_id, "agent": self._options.agent, "input": input_data}
+            body = {"chat_id": self._chat_id, "agent_config": self._options, "input": input_data}
         
         response = self._request("post", "/agents/run", data=body)
         if not response:
@@ -545,14 +520,12 @@ class AsyncAgent:
     
     async def send_message(self, text: str) -> ChatMessageDTO:
         """Send a message to the agent."""
-        is_adhoc = isinstance(self._options, AdHocAgentOptions)
-        
-        # Both template and ad-hoc use /agents/run
+        # Build request body - /agents/run accepts either "agent" (template ref) or "agent_config" (ad-hoc)
         input_data = {"text": text, "role": "user", "context": [], "system_prompt": "", "context_size": 0}
-        if is_adhoc:
-            body = {"chat_id": self._chat_id, "agent_config": asdict(self._options), "input": input_data}
+        if isinstance(self._options, str):
+            body = {"chat_id": self._chat_id, "agent": self._options, "input": input_data}
         else:
-            body = {"chat_id": self._chat_id, "agent": self._options.agent, "input": input_data}
+            body = {"chat_id": self._chat_id, "agent_config": self._options, "input": input_data}
         
         response = await self._request("post", "/agents/run", data=body)
         

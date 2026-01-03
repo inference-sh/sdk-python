@@ -31,8 +31,8 @@ from .models import (
 )
 
 from .utils import StorageDir, download
-from .client import Inference, AsyncInference, UploadFileOptions, TaskStatus
-from .types import is_terminal_status
+from .client import Inference, AsyncInference, UploadFileOptions, is_terminal_status
+from .types import TaskStatus
 from .models.errors import APIError, RequirementsNotMetError, RequirementError, SetupAction
 
 
@@ -58,7 +58,7 @@ def async_inference(*, api_key: str, base_url: str | None = None) -> AsyncInfere
     return AsyncInference(api_key=api_key, base_url=base_url)
 
 # Agent SDK (headless)
-from .agent import Agent, AsyncAgent, AgentConfig, AdHocAgentOptions, TemplateAgentOptions, ToolCallInfo
+from .agent import Agent, AsyncAgent, AgentConfig, ToolCallInfo
 
 # Tool Builder (fluent API)
 from .tools import (
@@ -86,10 +86,11 @@ from .types import (
     ToolType,
     ToolInvocationStatus,
     # Agent types
-    Agent,
+    Agent as AgentType,  # Renamed to avoid conflict with Agent class
     AgentTool,
     AgentToolDTO,
     AgentRuntimeConfig,
+    InternalToolsConfig,
     # Chat types
     ChatDTO,
     ChatMessageDTO,
@@ -180,8 +181,8 @@ __all__ = [
     "Agent",
     "AsyncAgent",
     "AgentConfig",
-    "AdHocAgentOptions",
-    "TemplateAgentOptions",
+    "AgentRuntimeConfig",
+    "InternalToolsConfig",
     "ToolCallInfo",
     # Tool Builder
     "tool",

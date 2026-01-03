@@ -13,8 +13,18 @@ from typing import Protocol, runtime_checkable
 from .models.errors import APIError, RequirementsNotMetError
 from .types import TaskStatus
 
+# Terminal statuses where a task is considered "done"
+TERMINAL_STATUSES = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}
+
+
+def is_terminal_status(status: int) -> bool:
+    """Check if a task status is terminal (completed, failed, or cancelled)."""
+    return status in TERMINAL_STATUSES
+
+
 if TYPE_CHECKING:
-    from .agent import AdHocAgentOptions, Agent, AsyncAgent
+    from .types import AgentRuntimeConfig
+    from .agent import Agent, AsyncAgent
 
 
 class TaskStream(AbstractContextManager['TaskStream']):
@@ -847,7 +857,7 @@ class Inference:
 
         return input_value
 
-    def agent(self, config: Union[str, "AdHocAgentOptions"]) -> "Agent":
+    def agent(self, config: Union[str, "AgentRuntimeConfig"]) -> "Agent":
         """Create an agent for chat interactions.
         
         Args:
@@ -862,8 +872,8 @@ class Inference:
             agent = client.agent('okaris/assistant@abc123')
             
             # Ad-hoc agent
-            agent = client.agent(AdHocAgentOptions(
-                core_app='infsh/claude-sonnet-4@xyz789',
+            agent = client.agent(AgentRuntimeConfig(
+                core_app_ref='infsh/claude-sonnet-4@xyz789',
                 system_prompt='You are a helpful assistant',
             ))
             
@@ -871,14 +881,10 @@ class Inference:
             response = agent.send_message('Hello!')
             ```
         """
-        from .agent import Agent, TemplateAgentOptions, AgentConfig
+        from .agent import Agent, AgentConfig
         
         agent_config = AgentConfig(api_key=self._api_key, base_url=self._base_url)
-        
-        if isinstance(config, str):
-            return Agent(agent_config, TemplateAgentOptions(agent=config))
-        else:
-            return Agent(agent_config, config)
+        return Agent(agent_config, config)
 
 
 class AsyncInference:
@@ -1295,7 +1301,7 @@ class AsyncInference:
                 except json.JSONDecodeError:
                     continue
 
-    def agent(self, config: Union[str, "AdHocAgentOptions"]) -> "AsyncAgent":
+    def agent(self, config: Union[str, "AgentRuntimeConfig"]) -> "AsyncAgent":
         """Create an async agent for chat interactions.
         
         Args:
@@ -1313,14 +1319,10 @@ class AsyncInference:
             response = await agent.send_message('Hello!')
             ```
         """
-        from .agent import AsyncAgent, TemplateAgentOptions, AgentConfig
+        from .agent import AsyncAgent, AgentConfig
         
         agent_config = AgentConfig(api_key=self._api_key, base_url=self._base_url)
-        
-        if isinstance(config, str):
-            return AsyncAgent(agent_config, TemplateAgentOptions(agent=config))
-        else:
-            return AsyncAgent(agent_config, config)
+        return AsyncAgent(agent_config, config)
 
 
 # --------------- small async utilities ---------------

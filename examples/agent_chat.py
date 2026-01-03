@@ -15,7 +15,7 @@ import json
 
 from inferencesh import (
     inference,
-    AdHocAgentOptions,
+    AgentRuntimeConfig,
     ToolCallInfo,
     is_terminal_status,
     # Tool builders
@@ -137,8 +137,8 @@ def main():
     
     # Create client and agent with ad-hoc config
     client = inference(api_key=api_key, base_url="https://api-dev.inference.sh")
-    agent = client.agent(AdHocAgentOptions(
-        core_app="infsh/claude-haiku-45@375bg07t",  # Replace with actual app reference
+    agent = client.agent(AgentRuntimeConfig(
+        core_app_ref="infsh/claude-haiku-45@375bg07t",  # Replace with actual app reference
         name="Tool Assistant",
         system_prompt="""You are a helpful assistant with access to tools.
 Available tools:
@@ -208,8 +208,8 @@ def main_streaming():
     
     # Create client and agent
     client = inference(api_key=api_key, base_url="https://api-dev.inference.sh")
-    agent = client.agent(AdHocAgentOptions(
-        core_app="infsh/claude-haiku-45@375bg07t",
+    agent = client.agent(AgentRuntimeConfig(
+        core_app_ref="infsh/claude-haiku-45@375bg07t",
         name="Simple Assistant",
         system_prompt="You are a helpful assistant.",
     ))
