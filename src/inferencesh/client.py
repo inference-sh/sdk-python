@@ -11,15 +11,33 @@ from contextlib import AbstractContextManager, AbstractAsyncContextManager
 from typing import Protocol, runtime_checkable
 
 from .models.errors import APIError, RequirementsNotMetError
-from .types import TaskStatus
+from .types import TaskStatus, ChatMessageStatus
 
 # Terminal statuses where a task is considered "done"
 TERMINAL_STATUSES = {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED}
 
 
 def is_terminal_status(status: int) -> bool:
-    """Check if a task status is terminal (completed, failed, or cancelled)."""
+    """Check if a task status is terminal (completed, failed, or cancelled).
+    
+    Deprecated: For ChatMessage status, use is_message_ready() instead.
+    """
     return status in TERMINAL_STATUSES
+
+
+def is_message_ready(status: str | None) -> bool:
+    """Check if a chat message status is terminal (ready, failed, or cancelled).
+    
+    Args:
+        status: The message status string (pending, ready, failed, cancelled)
+        
+    Returns:
+        True if the message has reached a terminal state.
+        Empty/None status is treated as "pending" (not terminal).
+    """
+    if not status:
+        return False
+    return status not in (ChatMessageStatus.PENDING, ChatMessageStatus.PENDING.value)
 
 
 if TYPE_CHECKING:

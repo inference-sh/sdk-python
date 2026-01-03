@@ -202,7 +202,7 @@ response = agent.send_message(
 | `send_message(text, ...)` | Send a message to the agent |
 | `get_chat(chat_id=None)` | Get chat history |
 | `stop_chat(chat_id=None)` | Stop current generation |
-| `submit_tool_result(tool_id, result)` | Submit result for a client tool |
+| `submit_tool_result(tool_id, result_or_action)` | Submit result for a client tool (string or {action, form_data}) |
 | `stream_messages(chat_id=None, ...)` | Stream message updates |
 | `stream_chat(chat_id=None, ...)` | Stream chat updates |
 | `reset()` | Start a new conversation |

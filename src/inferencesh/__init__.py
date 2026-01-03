@@ -31,31 +31,9 @@ from .models import (
 )
 
 from .utils import StorageDir, download
-from .client import Inference, AsyncInference, UploadFileOptions, is_terminal_status
-from .types import TaskStatus
+from .client import Inference, AsyncInference, UploadFileOptions, is_terminal_status, is_message_ready
+from .types import TaskStatus, ChatMessageStatus
 from .models.errors import APIError, RequirementsNotMetError, RequirementError, SetupAction
-
-
-def inference(*, api_key: str, base_url: str | None = None) -> Inference:
-    """Factory function for creating an Inference client (lowercase for branding).
-    
-    Example:
-        ```python
-        client = inference(api_key="your-api-key")
-        ```
-    """
-    return Inference(api_key=api_key, base_url=base_url)
-
-
-def async_inference(*, api_key: str, base_url: str | None = None) -> AsyncInference:
-    """Factory function for creating an AsyncInference client (lowercase for branding).
-    
-    Example:
-        ```python
-        client = async_inference(api_key="your-api-key")
-        ```
-    """
-    return AsyncInference(api_key=api_key, base_url=base_url)
 
 # Agent SDK (headless)
 from .agent import Agent, AsyncAgent, AgentConfig, ToolCallInfo
@@ -86,7 +64,6 @@ from .types import (
     ToolType,
     ToolInvocationStatus,
     # Agent types
-    Agent as AgentType,  # Renamed to avoid conflict with Agent class
     AgentTool,
     AgentToolDTO,
     AgentRuntimeConfig,
@@ -107,6 +84,28 @@ from .types import (
     ToolFunction,
     ToolParameters,
 )
+
+
+def inference(*, api_key: str, base_url: str | None = None) -> Inference:
+    """Factory function for creating an Inference client (lowercase for branding).
+    
+    Example:
+        ```python
+        client = inference(api_key="your-api-key")
+        ```
+    """
+    return Inference(api_key=api_key, base_url=base_url)
+
+
+def async_inference(*, api_key: str, base_url: str | None = None) -> AsyncInference:
+    """Factory function for creating an AsyncInference client (lowercase for branding).
+    
+    Example:
+        ```python
+        client = async_inference(api_key="your-api-key")
+        ```
+    """
+    return AsyncInference(api_key=api_key, base_url=base_url)
 
 __all__ = [
     # Base types
@@ -145,7 +144,9 @@ __all__ = [
     "AsyncInference",
     "UploadFileOptions",
     "TaskStatus",
+    "ChatMessageStatus",
     "is_terminal_status",
+    "is_message_ready",
     # Errors
     "APIError",
     "RequirementsNotMetError",

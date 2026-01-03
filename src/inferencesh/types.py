@@ -284,13 +284,13 @@ class CreateChatMessageResponse(TypedDict, total=False):
     assistant_message: ChatMessageDTO
 
 # WidgetActionRequest represents a user's response to a widget
-# Uses WidgetAction and WidgetFormData from chat.go
+# @deprecated Use ToolResultRequest with action field instead
 class WidgetActionRequest(TypedDict, total=False):
     action: WidgetAction
     form_data: WidgetFormData
 
-# ToolResultRequest represents a generic tool result callback
-# Used by hooks and other tools that expect an async callback
+# ToolResultRequest represents a tool result submission
+# For widget actions, clients should JSON-serialize { action, form_data } as the result string
 class ToolResultRequest(TypedDict, total=False):
     result: str
 
@@ -625,6 +625,12 @@ class ChatMessageRole(str, Enum):
     ASSISTANT = "assistant"
     TOOL = "tool"
 
+class ChatMessageStatus(str, Enum):
+    PENDING = "pending"
+    READY = "ready"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
 class ChatMessageContentType(str, Enum):
     TEXT = "text"
     REASONING = "reasoning"
@@ -703,8 +709,8 @@ class ChatMessageDTO(TypedDict, total=False):
     chat_id: str
     chat: ChatDTO
     order: int
+    status: ChatMessageStatus
     task_id: str
-    task_status: str
     role: ChatMessageRole
     content: List[ChatMessageContent]
     tools: List[Tool]

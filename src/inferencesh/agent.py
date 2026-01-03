@@ -141,11 +141,36 @@ class Agent:
         if self._chat_id:
             self._request("post", f"/chats/{self._chat_id}/stop")
     
-    def submit_tool_result(self, tool_invocation_id: str, result: str) -> None:
-        """Submit a tool execution result."""
-        self._request("post", f"/tools/{tool_invocation_id}", data={
-            "result": result,
-        })
+    def submit_tool_result(
+        self, 
+        tool_invocation_id: str, 
+        result_or_action: str | dict[str, Any]
+    ) -> None:
+        """
+        Submit a tool result.
+        
+        Args:
+            tool_invocation_id: The tool invocation ID
+            result_or_action: Either a raw result string, or a dict with:
+                - action: { "type": str, "payload"?: dict } (for widget actions)
+                - form_data?: dict (optional form data for widgets)
+                Dict values are JSON-serialized automatically.
+        
+        Example (raw result):
+            agent.submit_tool_result("tool123", '{"success": true}')
+        
+        Example (widget action):
+            agent.submit_tool_result("tool123", {
+                "action": {"type": "confirm"},
+                "form_data": {"name": "John"}
+            })
+        """
+        # Serialize widget actions to JSON string
+        if isinstance(result_or_action, str):
+            result = result_or_action
+        else:
+            result = json.dumps(result_or_action)
+        self._request("post", f"/tools/{tool_invocation_id}", data={"result": result})
     
     def stream_messages(
         self,
@@ -301,7 +326,7 @@ class Agent:
                     on_message(data)
                 
                 # Check for client tool invocations awaiting input
-                # (no task_status check - ID tracking handles duplicates)
+                # (ID tracking handles duplicates, status field indicates message readiness)
                 if on_tool_call:
                     for inv in data.get("tool_invocations") or []:
                         inv_id = inv.get("id")
@@ -545,10 +570,27 @@ class AsyncAgent:
         if self._chat_id:
             await self._request("post", f"/chats/{self._chat_id}/stop")
     
-    async def submit_tool_result(self, tool_invocation_id: str, result: str) -> None:
-        await self._request("post", f"/tools/{tool_invocation_id}", data={
-            "result": result,
-        })
+    async def submit_tool_result(
+        self, 
+        tool_invocation_id: str, 
+        result_or_action: str | dict[str, Any]
+    ) -> None:
+        """
+        Submit a tool result.
+        
+        Args:
+            tool_invocation_id: The tool invocation ID
+            result_or_action: Either a raw result string, or a dict with:
+                - action: { "type": str, "payload"?: dict } (for widget actions)
+                - form_data?: dict (optional form data for widgets)
+                Dict values are JSON-serialized automatically.
+        """
+        # Serialize widget actions to JSON string
+        if isinstance(result_or_action, str):
+            result = result_or_action
+        else:
+            result = json.dumps(result_or_action)
+        await self._request("post", f"/tools/{tool_invocation_id}", data={"result": result})
     
     async def stream_messages(self) -> AsyncIterator[ChatMessageDTO]:
         """Stream messages from the unified stream endpoint with TypedEvents."""

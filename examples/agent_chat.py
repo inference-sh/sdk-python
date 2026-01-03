@@ -17,7 +17,7 @@ from inferencesh import (
     inference,
     AgentRuntimeConfig,
     ToolCallInfo,
-    is_terminal_status,
+    is_message_ready,
     # Tool builders
     tool,
     internal_tools,
@@ -231,7 +231,7 @@ def main_streaming():
                 print(c["text"], end="", flush=True)
         
         # Check if complete
-        if is_terminal_status(message.get("task_status")):
+        if is_message_ready(message.get("status")):
             break
     
     print("\n\nDone!")
