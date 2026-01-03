@@ -7,18 +7,23 @@ from inferencesh import Inference, AsyncInference, TaskStatus
 
 
 class DummyResponse:
-    def __init__(self, status_code=200, json_data=None, text="", lines=None):
+    def __init__(self, status_code=200, json_data=None, text=None, lines=None):
         self.status_code = status_code
         self._json_data = json_data if json_data is not None else {"success": True, "data": {}}
-        self.text = text
+        # Auto-generate text from json_data if not provided
+        self.text = text if text is not None else json.dumps(self._json_data)
         self._lines = lines or []
         self.raw = None  # For SSE raw mode
+
+    @property
+    def ok(self):
+        return 200 <= self.status_code < 300
 
     def json(self):
         return self._json_data
 
     def raise_for_status(self):
-        if not (200 <= self.status_code < 300):
+        if not self.ok:
             raise RuntimeError(f"HTTP error {self.status_code}")
 
     def iter_lines(self, decode_unicode=False, chunk_size=None):
@@ -283,6 +288,14 @@ class MockAsyncResponse:
         self._json_data = json_data or {"success": True, "data": {}}
         self.status = status
         self._lines = lines or []
+        self.content_type = "application/json"
+    
+    @property
+    def ok(self):
+        return 200 <= self.status < 300
+    
+    async def text(self):
+        return json.dumps(self._json_data)
     
     async def json(self):
         return self._json_data

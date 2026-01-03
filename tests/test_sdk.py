@@ -100,19 +100,22 @@ def test_file_from_url(monkeypatch):
     
     monkeypatch.setattr(urllib.request, 'urlopen', mock_urlopen)
     
-    url = "https://example.com/test.pdf"
+    # Use a unique URL to avoid caching issues
+    import time
+    url = f"https://example.com/test_{int(time.time() * 1000)}.pdf"
     file = File(uri=url)
     
     try:
         assert file._is_url(url)
         assert file.exists()
-        assert file._tmp_path is not None
-        assert file._tmp_path.endswith('.pdf')  # Just check the extension
+        # Check that path is set (either from cache or fresh download)
+        assert file.path is not None
+        assert file.path.endswith('.pdf')  # Just check the extension
         assert file.content_type == "application/pdf"
     finally:
-        # Cleanup should happen in __del__ but let's be explicit for testing
-        if file._tmp_path and os.path.exists(file._tmp_path):
-            os.unlink(file._tmp_path)
+        # Cleanup - remove the file if it exists
+        if file.path and os.path.exists(file.path):
+            os.unlink(file.path)
 
 def test_file_metadata_refresh():
     with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
