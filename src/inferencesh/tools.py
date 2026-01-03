@@ -146,20 +146,13 @@ class AppToolBuilder(_ToolBuilder):
         self._app_ref = app_ref
     
     def build(self) -> AgentTool:
-        parts = self._app_ref.split("/")
-        ns = parts[0]
-        rest = parts[1] if len(parts) > 1 else ""
-        app_parts = rest.split("@")
-        app_name = app_parts[0]
-        version = app_parts[1] if len(app_parts) > 1 else None
-        
         return {
             "name": self._name,
             "display_name": self._display_name or self._name,
             "description": self._description,
             "type": ToolType.APP,
             "require_approval": self._require_approval or None,
-            "app": {"id": f"{ns}/{app_name}", "version_id": version},
+            "app": {"ref": self._app_ref},
         }
 
 
@@ -171,20 +164,13 @@ class AgentToolBuilder(_ToolBuilder):
         self._agent_ref = agent_ref
     
     def build(self) -> AgentTool:
-        parts = self._agent_ref.split("/")
-        ns = parts[0]
-        rest = parts[1] if len(parts) > 1 else ""
-        agent_parts = rest.split("@")
-        agent_name = agent_parts[0]
-        version = agent_parts[1] if len(agent_parts) > 1 else None
-        
         return {
             "name": self._name,
             "display_name": self._display_name or self._name,
             "description": self._description,
             "type": ToolType.AGENT,
             "require_approval": self._require_approval or None,
-            "agent": {"id": f"{ns}/{agent_name}", "version_id": version},
+            "agent": {"ref": self._agent_ref},
         }
 
 

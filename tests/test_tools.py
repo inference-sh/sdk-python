@@ -184,12 +184,12 @@ class TestAppToolBuilder:
         )
 
         assert t["type"] == "app"
-        assert t["app"] == {"id": "infsh/flux", "version_id": "v1.0"}
+        assert t["app"] == {"ref": "infsh/flux@v1.0"}
         assert t["description"] == "Generate image"
 
     def test_app_tool_with_latest_version(self):
         t = app_tool("browse", "my-org/browser@latest").build()
-        assert t["app"] == {"id": "my-org/browser", "version_id": "latest"}
+        assert t["app"] == {"ref": "my-org/browser@latest"}
 
     def test_app_tool_with_parameters(self):
         t = (
@@ -212,7 +212,7 @@ class TestAgentToolBuilder:
         )
 
         assert t["type"] == "agent"
-        assert t["agent"] == {"id": "acme/researcher", "version_id": "v2"}
+        assert t["agent"] == {"ref": "acme/researcher@v2"}
 
     def test_agent_tool_with_display_and_approval(self):
         t = (

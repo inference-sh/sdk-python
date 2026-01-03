@@ -26,16 +26,24 @@ class ToolType(str, Enum):
 
 # AppToolConfig contains configuration for an app tool
 class AppToolConfig(TypedDict, total=False):
+    # Ref is the human-readable reference: "namespace/name@shortVersionId"
+    # This is what users specify in configs/SDKs
+    ref: str
+    # ID and VersionID are resolved full database UUIDs (populated at runtime)
     id: str
     version_id: str
-    # Resolved at runtime, not stored
+    # Resolved app object (populated at runtime)
     app: App
 
 # AgentToolConfig contains configuration for a sub-agent tool
 class AgentToolConfig(TypedDict, total=False):
+    # Ref is the human-readable reference: "namespace/name@shortVersionId"
+    # This is what users specify in configs/SDKs
+    ref: str
+    # ID and VersionID are resolved full database UUIDs (populated at runtime)
     id: str
     version_id: str
-    # Resolved at runtime, not stored
+    # Resolved agent object (populated at runtime)
     agent: Agent
 
 # HookToolConfig contains configuration for a webhook tool
@@ -63,6 +71,12 @@ class AgentTool(TypedDict, total=False):
     agent: AgentToolConfig
     hook: HookToolConfig
     client: ClientToolConfig
+    internal: InternalToolConfig
+
+# InternalToolConfig contains configuration for internal/built-in tools
+class InternalToolConfig(TypedDict, total=False):
+    category: str
+    operation: str
 
 # AgentToolDTO for API responses
 class AgentToolDTO(TypedDict, total=False):
@@ -78,11 +92,13 @@ class AgentToolDTO(TypedDict, total=False):
     client: ClientToolConfigDTO
 
 class AppToolConfigDTO(TypedDict, total=False):
+    ref: str
     id: str
     version_id: str
     app: AppDTO
 
 class AgentToolConfigDTO(TypedDict, total=False):
+    ref: str
     id: str
     version_id: str
     agent: AgentDTO
@@ -164,6 +180,9 @@ class AgentRuntimeConfig(TypedDict, total=False):
     system_prompt: str
     example_prompts: List[str]
     # Core LLM
+    # CoreAppRef is the user-facing ref (namespace/name@shortid) - used in ad-hoc configs
+    # CoreApp is the resolved config - populated by backend after resolving CoreAppRef
+    core_app_ref: str
     core_app: CoreAppConfig
     core_app_input: Any
     # Tools (apps, agents, hooks, client tools)
@@ -182,6 +201,7 @@ class AgentRuntimeConfigDTO(TypedDict, total=False):
     description: str
     system_prompt: str
     example_prompts: List[str]
+    core_app_ref: str
     core_app: CoreAppConfigDTO
     core_app_input: Any
     tools: List[Optional[AgentToolDTO]]
@@ -233,22 +253,12 @@ class ApiAgentRunRequest(TypedDict, total=False):
     chat_id: str
     # Template agent reference in format: namespace/name@shortid
     # Example: "my-org/assistant@abc123"
-    # Use this OR core_app, not both
+    # Use this OR AgentConfig, not both
     agent: str
-    # Core LLM app reference for ad-hoc agents in format: namespace/name@shortid
-    # Example: "infsh/claude-sonnet-4@1195p4sq"
-    # Use this for ad-hoc agents (without a saved template)
-    core_app: str
-    # LLM parameters for ad-hoc agents (temperature, top_p, context_size, etc.)
-    core_app_input: Any
-    # Agent configuration for ad-hoc agents
-    name: str
-    description: str
-    system_prompt: str
-    example_prompts: List[str]
-    # Tools configuration for ad-hoc agents
-    tools: List[Optional[AgentTool]]
-    internal_tools: InternalToolsConfig
+    # Ad-hoc agent configuration
+    # For ad-hoc agents, set core_app_ref to the LLM app reference
+    # Example: { "core_app_ref": "infsh/claude-sonnet-4@abc123", "system_prompt": "..." }
+    agent_config: AgentRuntimeConfig
     # The message to send
     input: ChatTaskInput
     # If true, returns SSE stream instead of JSON response
@@ -1165,14 +1175,6 @@ class TaskStatus(IntEnum):
     COMPLETED = 9
     FAILED = 10
     CANCELLED = 11
-
-
-def is_terminal_status(status: int | None) -> bool:
-    """Check if a task status is terminal (completed, failed, or cancelled)."""
-    if status is None:
-        return False
-    return status >= TaskStatus.COMPLETED
-
 
 class Infra(str, Enum):
     PRIVATE = "private"

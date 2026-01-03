@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, Optional, Callable, Iterator, AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from .types import (
     ChatDTO,
@@ -30,14 +30,18 @@ class AgentConfig:
 
 @dataclass
 class AdHocAgentOptions:
-    """Ad-hoc agent configuration (no saved template)."""
-    core_app: str
-    """Core LLM app: namespace/name@shortid"""
-    core_app_input: Optional[Dict[str, Any]] = None
+    """Ad-hoc agent configuration - mirrors Go AgentRuntimeConfig."""
+    core_app_ref: str
+    """Core LLM app ref: namespace/name@shortid (e.g., "infsh/claude-sonnet-4@abc123")"""
     name: Optional[str] = None
+    namespace: Optional[str] = None
+    description: Optional[str] = None
     system_prompt: Optional[str] = None
+    example_prompts: Optional[list[str]] = None
+    core_app_input: Optional[Dict[str, Any]] = None
     tools: Optional[list[AgentTool]] = None
     internal_tools: Optional[InternalToolsConfig] = None
+    output_schema: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -129,23 +133,11 @@ class Agent:
         is_adhoc = isinstance(self._options, AdHocAgentOptions)
         
         # Both template and ad-hoc use /agents/run
+        input_data = {"text": text, "image": image_uri, "files": file_uris, "role": "user", "context": [], "system_prompt": "", "context_size": 0}
         if is_adhoc:
-            body = {
-                "chat_id": self._chat_id,
-                "core_app": self._options.core_app,
-                "core_app_input": self._options.core_app_input,
-                "name": self._options.name,
-                "system_prompt": self._options.system_prompt,
-                "tools": self._options.tools,
-                "internal_tools": self._options.internal_tools,
-                "input": {"text": text, "image": image_uri, "files": file_uris, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
-            }
+            body = {"chat_id": self._chat_id, "agent_config": asdict(self._options), "input": input_data}
         else:
-            body = {
-                "chat_id": self._chat_id,
-                "agent": self._options.agent,
-                "input": {"text": text, "image": image_uri, "files": file_uris, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
-            }
+            body = {"chat_id": self._chat_id, "agent": self._options.agent, "input": input_data}
         
         response = self._request("post", "/agents/run", data=body)
         if not response:
@@ -556,23 +548,11 @@ class AsyncAgent:
         is_adhoc = isinstance(self._options, AdHocAgentOptions)
         
         # Both template and ad-hoc use /agents/run
+        input_data = {"text": text, "role": "user", "context": [], "system_prompt": "", "context_size": 0}
         if is_adhoc:
-            body = {
-                "chat_id": self._chat_id,
-                "core_app": self._options.core_app,
-                "core_app_input": self._options.core_app_input,
-                "name": self._options.name,
-                "system_prompt": self._options.system_prompt,
-                "tools": self._options.tools,
-                "internal_tools": self._options.internal_tools,
-                "input": {"text": text, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
-            }
+            body = {"chat_id": self._chat_id, "agent_config": asdict(self._options), "input": input_data}
         else:
-            body = {
-                "chat_id": self._chat_id,
-                "agent": self._options.agent,
-                "input": {"text": text, "role": "user", "context": [], "system_prompt": "", "context_size": 0},
-            }
+            body = {"chat_id": self._chat_id, "agent": self._options.agent, "input": input_data}
         
         response = await self._request("post", "/agents/run", data=body)
         
