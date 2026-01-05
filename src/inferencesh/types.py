@@ -283,12 +283,6 @@ class CreateChatMessageResponse(TypedDict, total=False):
     user_message: ChatMessageDTO
     assistant_message: ChatMessageDTO
 
-# WidgetActionRequest represents a user's response to a widget
-# @deprecated Use ToolResultRequest with action field instead
-class WidgetActionRequest(TypedDict, total=False):
-    action: WidgetAction
-    form_data: WidgetFormData
-
 # ToolResultRequest represents a tool result submission
 # For widget actions, clients should JSON-serialize { action, form_data } as the result string
 class ToolResultRequest(TypedDict, total=False):
@@ -593,7 +587,7 @@ class PermissionModelDTO(TypedDict, total=False):
 class ChatStatus(str, Enum):
     BUSY = "busy"
     IDLE = "idle"
-    # ChatStatusWaitingInput ChatStatus = "waiting_input"
+    AWAITING_INPUT = "awaiting_input"
     COMPLETED = "completed"
 
 class IntegrationContext(TypedDict, total=False):
@@ -604,6 +598,7 @@ class IntegrationContext(TypedDict, total=False):
 class ChatData(TypedDict, total=False):
     plan_steps: List[PlanStep]
     memory: StringEncodedMap
+    always_allowed_tools: List[str]
 
 # PlanStep represents a step in an agent's execution plan
 class PlanStep(TypedDict, total=False):
@@ -1509,6 +1504,7 @@ class User(TypedDict, total=False):
     default_team_id: str
     role: str
     email: str
+    email_verified: bool
     name: str
     full_name: str
     avatar_url: str
@@ -1612,7 +1608,4 @@ class Widget(TypedDict, total=False):
     json: str
     children: List[WidgetNode]
     actions: List[WidgetActionButton]
-
-# WidgetFormData represents the form data collected from widget inputs
-WidgetFormData = Dict[str, Any]
 
