@@ -493,10 +493,10 @@ class Inference:
         of status updates.
         
         App Reference Format:
-            ``namespace/name@shortid`` (version is required)
+            ``namespace/name@shortid`` or ``namespace/name@shortid:function``
             
-            The short ID ensures your code always runs the same version,
-            protecting against breaking changes from app updates.
+            The short ID ensures your code always runs the same version.
+            You can optionally specify a function name to run a specific entry point.
         
         Args:
             params: Task parameters including:
