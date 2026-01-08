@@ -505,6 +505,14 @@ class AppVariant(TypedDict, total=False):
     env: Dict[str, str]
     python: str
 
+# AppFunction represents a callable entry point within an app version.
+# Each function has its own input/output schema while sharing the app's setup.
+class AppFunction(TypedDict, total=False):
+    name: str
+    description: str
+    input_schema: Any
+    output_schema: Any
+
 class AppVersion(TypedDict, total=False):
     # ShortID is a human-friendly version identifier (e.g., "abc123")
     # Unique within the app, used in references like "namespace/app@abc123"
@@ -517,6 +525,11 @@ class AppVersion(TypedDict, total=False):
     setup_schema: Any
     input_schema: Any
     output_schema: Any
+    # Functions contains the callable entry points for this app version.
+    # Each function has its own input/output schema. If nil/empty, the app uses legacy single-function mode
+    # with InputSchema/OutputSchema at the version level.
+    functions: Dict[str, AppFunction]
+    default_function: str
     variants: Dict[str, AppVariant]
     env: Dict[str, str]
     kernel: str
@@ -543,6 +556,8 @@ class AppVersionDTO(TypedDict, total=False):
     setup_schema: Any
     input_schema: Any
     output_schema: Any
+    functions: Dict[str, AppFunction]
+    default_function: str
     variants: Dict[str, AppVariant]
     env: Dict[str, str]
     kernel: str
@@ -845,6 +860,7 @@ class FlowNodeData(TypedDict, total=False):
     app: AppDTO
     app_id: str
     app_version_id: str
+    function: str
     infra: Infra
     workers: List[str]
     setup: Any
@@ -1215,6 +1231,7 @@ class TaskDTO(TypedDict, total=False):
     app_version_id: str
     app_version: AppVersionDTO
     app_variant: str
+    function: str
     infra: Infra
     workers: List[str]
     flow_id: str
