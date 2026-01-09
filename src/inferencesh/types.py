@@ -243,9 +243,6 @@ class ApiAppRunRequest(TypedDict, total=False):
     # If true, returns SSE stream instead of JSON response
     stream: bool
 
-# ApiTaskRequest is an alias for ApiAppRunRequest (deprecated name)
-ApiTaskRequest = ApiAppRunRequest
-
 # ApiAgentRunRequest is the request body for /agents/run endpoint.
 # Supports both template agents and ad-hoc agents.
 class ApiAgentRunRequest(TypedDict, total=False):
@@ -264,9 +261,6 @@ class ApiAgentRunRequest(TypedDict, total=False):
     # If true, returns SSE stream instead of JSON response
     stream: bool
 
-# ApiAgentMessageRequest is an alias for ApiAgentRunRequest (deprecated name)
-ApiAgentMessageRequest = ApiAgentRunRequest
-
 class CreateAgentMessageRequest(TypedDict, total=False):
     chat_id: str
     agent_id: str
@@ -279,7 +273,7 @@ class CreateAgentMessageRequest(TypedDict, total=False):
     # If provided, creates a chat with this config directly (no agent reference)
     agent_config: AgentRuntimeConfig
 
-class CreateChatMessageResponse(TypedDict, total=False):
+class CreateAgentMessageResponse(TypedDict, total=False):
     user_message: ChatMessageDTO
     assistant_message: ChatMessageDTO
 
