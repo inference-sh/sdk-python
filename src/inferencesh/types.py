@@ -1182,10 +1182,11 @@ class TaskStatus(IntEnum):
     SERVING = 5
     SETTING_UP = 6
     RUNNING = 7
-    UPLOADING = 8
-    COMPLETED = 9
-    FAILED = 10
-    CANCELLED = 11
+    CANCELLING = 8
+    UPLOADING = 9
+    COMPLETED = 10
+    FAILED = 11
+    CANCELLED = 12
 
 class Infra(str, Enum):
     PRIVATE = "private"
